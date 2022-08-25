@@ -263,9 +263,9 @@ dream_interface = gr.Interface(
     outputs=[
         gr.Gallery(label="Images"),
         gr.Number(label='Seed'),
-        gr.Textbox(label="Copy-paste generation parameters"),
+        gr.Textbox(label="Parameters"),
     ],
-    title="Stable Diffusion Text-to-Image K",
+    title="Stable Diffusion Text-to-Image",
     description="Generate images from text with Stable Diffusion (using K-LMS)",
     allow_flagging="never"
 )
