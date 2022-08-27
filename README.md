@@ -1,4 +1,5 @@
 # Stable Diffusion
+
 *Stable Diffusion was made possible thanks to a collaboration with [Stability AI](https://stability.ai/) and [Runway](https://runwayml.com/) and builds upon our previous work:*
 
 [**High-Resolution Image Synthesis with Latent Diffusion Models**](https://ommer-lab.com/research/latent-diffusion-models/)<br/>
@@ -20,6 +21,11 @@ Similar to Google's [Imagen](https://arxiv.org/abs/2205.11487),
 this model uses a frozen CLIP ViT-L/14 text encoder to condition the model on text prompts.
 With its 860M UNet and 123M text encoder, the model is relatively lightweight and runs on a GPU with at least 10GB VRAM.
 See [this section](#stable-diffusion-v1) below and the [model card](https://huggingface.co/CompVis/stable-diffusion).
+
+
+## Web UI, GFPGAN, and Real-ESRGAN
+
+Uses [hlky Web UI](https://github.com/hlky/stable-diffusion-webui) to drive a number of settings and additional features (e.x. [GFPGAN](https://github.com/gSOLO/GFPGAN) for face fixing, and [Real-ESRGAN](https://github.com/gSOLO/Real-ESRGAN) for upscaling).
 
   
 ## Requirements
