@@ -4,3 +4,6 @@ outputs/*
 
 latent_diffusion.egg-info/*
 *__pycache__*
+GFPGAN/
+src/clip/
+src/taming-transformers/
