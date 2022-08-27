@@ -53,6 +53,6 @@ MANIFEST
 *.ckpt.*
 outputs/*
 GFPGAN/
-Real-ESRGAN/
+RealESRGAN/
 src/clip/
 src/taming-transformers/
