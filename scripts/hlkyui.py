@@ -1,5 +1,5 @@
-# https://github.com/hlky/stable-diffusion/tree/main/scripts/webui.py
-# webui.py denotes changes
+# From https://github.com/hlky/stable-diffusion/tree/main/scripts/webui.py
+# webui.py marks changes
 # ./GFPGAN @ https://github.com/gSOLO/GFPGAN
 # ./RealESRGAN @ https://github.com/gSOLO/Real-ESRGAN
 import argparse, os, sys, glob, re
