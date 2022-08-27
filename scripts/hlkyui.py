@@ -1455,7 +1455,7 @@ css = styling if opt.no_progressbar_hiding else styling + css_hide_progressbar
 
 with gr.Blocks(css=css, analytics_enabled=False, title="Stable Diffusion WebUI") as demo:
     with gr.Tabs(elem_id='tabss') as tabs:
-        with gr.TabItem("Stable Diffusion Text-to-Image Unified", id='txt2img_tab'):
+        with gr.TabItem("Stable Diffusion Text-to-Image", id='txt2img_tab'):
             with gr.Row(elem_id="prompt_row"):
                 txt2img_prompt = gr.Textbox(label="Prompt", 
                 elem_id='prompt_input',
@@ -1511,7 +1511,7 @@ with gr.Blocks(css=css, analytics_enabled=False, title="Stable Diffusion WebUI")
                 [output_txt2img_gallery, output_txt2img_seed, output_txt2img_params, output_txt2img_stats]
             )
 
-        with gr.TabItem("Stable Diffusion Image-to-Image Unified", id="img2img_tab"):
+        with gr.TabItem("Stable Diffusion Image-to-Image", id="img2img_tab"):
             with gr.Row(elem_id="prompt_row"):
                 img2img_prompt = gr.Textbox(label="Prompt", 
                 elem_id='img2img_prompt_input',
