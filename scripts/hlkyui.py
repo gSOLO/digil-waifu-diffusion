@@ -1323,7 +1323,7 @@ txt2img_defaults = {
     'toggles': [1, 2, 3],
     'sampler_name': 'k_lms',
     'ddim_eta': 0.0,
-    'n_iter': 1,
+    'n_iter': 2,
     'batch_size': 1,
     'cfg_scale': 7.5,
     'seed': '',
@@ -1375,7 +1375,7 @@ img2img_defaults = {
     'toggles': [1, 4, 5],
     'sampler_name': 'k_lms',
     'ddim_eta': 0.0,
-    'n_iter': 1,
+    'n_iter': 2,
     'batch_size': 1,
     'cfg_scale': 5.0,
     'denoising_strength': 0.75,
@@ -1471,7 +1471,7 @@ with gr.Blocks(css=css, analytics_enabled=False, title="Stable Diffusion WebUI")
                     txt2img_width = gr.Slider(minimum=64, maximum=2048, step=64, label="Width", value=txt2img_defaults["width"])
                     txt2img_cfg = gr.Slider(minimum=1.0, maximum=30.0, step=0.5, label='Classifier Free Guidance Scale', value=txt2img_defaults['cfg_scale']) # webui.py
                     txt2img_seed = gr.Textbox(label="Seed (blank to randomize)", lines=1, max_lines=1, value=txt2img_defaults["seed"])                    
-                    txt2img_batch_count = gr.Slider(minimum=2, maximum=36, step=1, label='Batch Count', value=txt2img_defaults['n_iter']) # webui.py
+                    txt2img_batch_count = gr.Slider(minimum=1, maximum=36, step=1, label='Batch Count', value=txt2img_defaults['n_iter']) # webui.py
                     txt2img_batch_size = gr.Slider(minimum=1, maximum=4, step=1, label='Batch Size', value=txt2img_defaults['batch_size']) # webui.py
                 with gr.Column():
                     output_txt2img_gallery = gr.Gallery(label="Images", elem_id="gallery_output").style(grid=[4,4])
@@ -1540,7 +1540,7 @@ with gr.Blocks(css=css, analytics_enabled=False, title="Stable Diffusion WebUI")
                     img2img_sampling = gr.Radio(label='Sampling method (k_lms is default)', choices=["DDIM", 'k_dpm_2_a', 'k_dpm_2', 'k_euler_a', 'k_euler', 'k_heun', 'k_lms'], value=img2img_defaults['sampler_name']) # webui.py
                     img2img_toggles = gr.CheckboxGroup(label='', choices=img2img_toggles, value=img2img_toggle_defaults, type="index")
                     img2img_realesrgan_model_name = gr.Dropdown(label='RealESRGAN Model', choices=['RealESRGAN_x4plus', 'RealESRGAN_x4plus_anime_6B'], value='RealESRGAN_x4plus', visible=RealESRGAN is not None) # TODO: Feels like I shouldnt slot it in here. # webui.py
-                    img2img_batch_count = gr.Slider(minimum=2, maximum=36, step=1, label='Batch Count', value=img2img_defaults['n_iter']) # webui.py
+                    img2img_batch_count = gr.Slider(minimum=1, maximum=36, step=1, label='Batch Count', value=img2img_defaults['n_iter']) # webui.py
                     img2img_batch_size = gr.Slider(minimum=1, maximum=8, step=1, label='Batch Size', value=img2img_defaults['batch_size']) # webui.py
                     img2img_cfg = gr.Slider(minimum=1.0, maximum=30.0, step=0.5, label='Classifier Free Guidance Scale', value=img2img_defaults['cfg_scale']) # webui.py
                     img2img_denoising = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising Strength', value=img2img_defaults['denoising_strength'])
