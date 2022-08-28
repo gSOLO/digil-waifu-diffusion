@@ -1521,7 +1521,7 @@ with gr.Blocks(css=css, analytics_enabled=False, title="Stable Diffusion WebUI")
                             # output_txt2img_copy_seed = gr.Button("Copy").click(inputs=output_txt2img_seed, outputs=[], _js='(x) => navigator.clipboard.writeText(x)', fn=None, show_progress=False) # webui.py
                         with gr.Group():
                             output_txt2img_select_image = gr.Number(label='Image', value=1, precision=None) # webui.py
-                            output_txt2img_copy_to_input_btn = gr.Button("Image-to-Image", full_width=True) # webui.py
+                            # output_txt2img_copy_to_input_btn = gr.Button("Image-to-Image", full_width=True) # webui.py # webui.py
                     with gr.Group():
                         output_txt2img_params = gr.Textbox(label="Parameters", interactive=False) # webui.py
                         # output_txt2img_copy_params = gr.Button("Copy").click(inputs=output_txt2img_params, outputs=[], _js='(x) => navigator.clipboard.writeText(x)', fn=None, show_progress=False) # webui.py
