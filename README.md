@@ -1,6 +1,10 @@
-# Stable Diffusion
+# Digil Diffusion
 
-*Stable Diffusion was made possible thanks to a collaboration with [Stability AI](https://stability.ai/) and [Runway](https://runwayml.com/) and builds upon our previous work:*
+*Digil Diffusion* is an amalgamation of various open source projects that contribute to the use of and extention to the utility of Stable Diffusion, **an AI driven machine learning model used to generate digital images from natural language descriptions**.
+
+## Stable Diffusion
+
+*Stable Diffusion was made possible thanks to a collaboration with [Stability AI](https://stability.ai/) and [Runway](https://runwayml.com/) and builds upon previous work:*
 
 [**High-Resolution Image Synthesis with Latent Diffusion Models**](https://ommer-lab.com/research/latent-diffusion-models/)<br/>
 [Robin Rombach](https://github.com/rromb)\*,
@@ -8,10 +12,10 @@
 [Dominik Lorenz](https://github.com/qp-qp)\,
 [Patrick Esser](https://github.com/pesser),
 [Björn Ommer](https://hci.iwr.uni-heidelberg.de/Staff/bommer)<br/>
+_[CVPR '22 Oral](https://openaccess.thecvf.com/content/CVPR2022/html/Rombach_High-Resolution_Image_Synthesis_With_Latent_Diffusion_Models_CVPR_2022_paper.html) |
+[GitHub](https://github.com/CompVis/latent-diffusion) | [arXiv](https://arxiv.org/abs/2112.10752) | [Project page](https://ommer-lab.com/research/latent-diffusion-models/)_
 
-**CVPR '22 Oral**
-
-which is available on [GitHub](https://github.com/CompVis/latent-diffusion). PDF at [arXiv](https://arxiv.org/abs/2112.10752). Please also visit our [Project page](https://ommer-lab.com/research/latent-diffusion-models/).
+Available on [GitHub](https://github.com/CompVis/latent-diffusion). PDF at [arXiv](https://arxiv.org/abs/2112.10752). Please also visit the [Project page](https://ommer-lab.com/research/latent-diffusion-models/).
 
 ![txt2img-stable2](assets/stable-samples/txt2img/merged-0006.png)
 [Stable Diffusion](#stable-diffusion-v1) is a latent text-to-image diffusion
@@ -21,6 +25,18 @@ Similar to Google's [Imagen](https://arxiv.org/abs/2205.11487),
 this model uses a frozen CLIP ViT-L/14 text encoder to condition the model on text prompts.
 With its 860M UNet and 123M text encoder, the model is relatively lightweight and runs on a GPU with at least 10GB VRAM.
 See [this section](#stable-diffusion-v1) below and the [model card](https://huggingface.co/CompVis/stable-diffusion).
+
+
+## Waifu Diffusion
+
+Waifu Diffusion is the name for the project of finetuning Stable Diffusion on Danbooru images.
+
+<img src=https://cdn.discordapp.com/attachments/872361510133981234/1016022078635388979/unknown.png?3867929 width=40% height=40%>
+
+<sub>Prompt: touhou 1girl komeiji_koishi portrait</sub>
+
+
+Model Link: https://huggingface.co/hakurei/waifu-diffusion
 
 
 ## Web UI, GFPGAN, and Real-ESRGAN
@@ -191,7 +207,7 @@ This procedure can, for example, also be used to upscale samples from the base m
 
 ## Comments 
 
-- Our codebase for the diffusion models builds heavily on [OpenAI's ADM codebase](https://github.com/openai/guided-diffusion)
+- The codebase for the diffusion models builds heavily on [OpenAI's ADM codebase](https://github.com/openai/guided-diffusion)
 and [https://github.com/lucidrains/denoising-diffusion-pytorch](https://github.com/lucidrains/denoising-diffusion-pytorch). 
 Thanks for open-sourcing!
 
