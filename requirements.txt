@@ -14,6 +14,12 @@ transformers==4.19.2
 torchmetrics==0.6.0
 kornia==0.6
 gradio
+basicsr
+gfpgan
+Pillow
+realesrgan
+torch
+pytorch_lightning
 git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
 git+https://github.com/openai/CLIP.git@main#egg=clip
 git+https://github.com/hlky/k-diffusion-sd#egg=k_diffusion
