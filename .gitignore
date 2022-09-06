@@ -55,7 +55,15 @@ MANIFEST
 *.ckpt
 *.ckpt.*
 outputs/*
+ESRGAN/
 GFPGAN/
+LDSR/
 RealESRGAN/
 src/clip/
 src/taming-transformers/
+/repositories
+/venv
+/tmp
+/model.ckpt
+/GFPGANv1.3.pth
+/ui-config.json
