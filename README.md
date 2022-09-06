@@ -41,8 +41,38 @@ Model Link: https://huggingface.co/hakurei/waifu-diffusion
 
 ## Web UI, GFPGAN, and Real-ESRGAN
 
-Uses [hlky Web UI](https://github.com/hlky/stable-diffusion-webui) to drive a number of settings and additional features (e.x. [GFPGAN](https://github.com/gSOLO/GFPGAN) for face fixing, and [Real-ESRGAN](https://github.com/gSOLO/Real-ESRGAN) for upscaling).
+Has an implemetation of both the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui) *(webui.cmd)* and [hlky Web UI](https://github.com/hlky/stable-diffusion-webui) *(hlkyui.cmd)* to drive a number of settings and additional features (e.x. [GFPGAN](https://github.com/gSOLO/GFPGAN) for face fixing, and [Real-ESRGAN](https://github.com/gSOLO/Real-ESRGAN) for upscaling).
 
+## Automatic Web UI Features
+
+[<font size="12">Detailed feature showcase with images, art by Greg Rutkowski</font>](https://github.com/AUTOMATIC1111/stable-diffusion-webui-feature-showcase)
+
+- Original txt2img and img2img modes
+- One click install and run script (but you still must install python, git and CUDA)
+- Outpainting
+- Inpainting
+- Prompt matrix
+- Stable Diffusion upscale
+- Attention
+- Loopback
+- X/Y plot
+- Textual Inversion
+- Extras tab with:
+  - GFPGAN, neural network that fixes faces
+  - RealESRGAN, neural network upscaler
+  - ESRGAN, neural network with a lot of third party models
+- Resizing aspect ratio options
+- Sampling method selection
+- Interrupt processing at any time
+- 4GB videocard support
+- Correct seeds for batches
+- Prompt length validation
+- Generation parameters added as text to PNG
+- Tab to view an existing picture's generation parameters
+- Settings page
+- Running custom code from UI
+- Mouseover hints fo most UI elements
+- Possible to change defaults/mix/max/step values for UI elements via text config
   
 ## Requirements
 A suitable [conda](https://conda.io/) environment named `ldm` can be created
