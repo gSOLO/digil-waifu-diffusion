@@ -67,3 +67,4 @@ src/taming-transformers/
 /model.ckpt
 /GFPGANv1.3.pth
 /ui-config.json
+\!outputs.lnk
