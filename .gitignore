@@ -68,3 +68,7 @@ src/taming-transformers/
 /GFPGANv1.3.pth
 /ui-config.json
 \!outputs.lnk
+docs/*
+
+# Obsidian
+.obsidian/
