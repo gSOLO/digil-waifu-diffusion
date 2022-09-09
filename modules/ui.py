@@ -1,3 +1,14 @@
+# Digil Diffusion
+#
+# Use styles located at /assets/webui/style.css
+#   "style.css"
+#   "assets/webui/style.css"
+#
+# Use script located at /assets/webui/script.js
+#   "script.js"
+#   "assets/webui/script.js"
+
+
 import base64
 import html
 import io
@@ -642,7 +653,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
         (settings_interface, "Settings"),
     ]
 
-    with open(os.path.join(script_path, "style.css"), "r", encoding="utf8") as file:
+    with open(os.path.join(script_path, "assets/webui/style.css"), "r", encoding="utf8") as file:
         css = file.read()
 
     if not cmd_opts.no_progressbar_hiding:
@@ -698,7 +709,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
     return demo
 
 
-with open(os.path.join(script_path, "script.js"), "r", encoding="utf8") as jsfile:
+with open(os.path.join(script_path, "assets/webui/script.js"), "r", encoding="utf8") as jsfile:
     javascript = jsfile.read()
 
 
