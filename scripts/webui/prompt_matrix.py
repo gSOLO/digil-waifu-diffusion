@@ -20,6 +20,8 @@ def draw_xy_grid(xs, ys, x_label, y_label, cell):
 
     first_pocessed = None
 
+    state.job_count = len(xs) * len(ys)
+
     for iy, y in enumerate(ys):
         for ix, x in enumerate(xs):
             state.job = f"{ix + iy * len(xs) + 1} out of {len(xs) * len(ys)}"
@@ -48,7 +50,7 @@ class Script(scripts.Script):
         return [put_at_start]
 
     def run(self, p, put_at_start):
-        seed = int(random.randrange(4294967294) if p.seed == -1 else p.seed)
+        seed = modules.processing.set_seed(p.seed)
 
         original_prompt = p.prompt[0] if type(p.prompt) == list else p.prompt
 

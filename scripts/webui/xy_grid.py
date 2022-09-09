@@ -9,6 +9,7 @@ from modules import images
 from modules.processing import process_images, Processed
 from modules.shared import opts, cmd_opts, state
 import modules.sd_samplers
+import re
 
 
 def apply_field(field):
@@ -20,6 +21,7 @@ def apply_field(field):
 
 def apply_prompt(p, x, xs):
     p.prompt = p.prompt.replace(xs[0], x)
+    p.negative_prompt = p.negative_prompt.replace(xs[0], x)
 
 
 samplers_dict = {}
@@ -67,6 +69,8 @@ def draw_xy_grid(xs, ys, x_label, y_label, cell):
 
     first_pocessed = None
 
+    state.job_count = len(xs) * len(ys)
+
     for iy, y in enumerate(ys):
         for ix, x in enumerate(xs):
             state.job = f"{ix + iy * len(xs) + 1} out of {len(xs) * len(ys)}"
@@ -84,6 +88,8 @@ def draw_xy_grid(xs, ys, x_label, y_label, cell):
 
     return first_pocessed
 
+
+re_range = re.compile(r"\s*([+-]?\s*\d+)\s*-\s*([+-]?\s*\d+)(?:\s*\(([+-]\d+)\s*\))?\s*")
 
 class Script(scripts.Script):
     def title(self):
@@ -103,7 +109,7 @@ class Script(scripts.Script):
         return [x_type, x_values, y_type, y_values]
 
     def run(self, p, x_type, x_values, y_type, y_values):
-        p.seed = int(random.randrange(4294967294) if p.seed == -1 else p.seed)
+        p.seed = modules.processing.set_seed(p.seed)
         p.batch_size = 1
         p.batch_count = 1
 
@@ -114,11 +120,13 @@ class Script(scripts.Script):
                 valslist_ext = []
 
                 for val in valslist:
-                    if "-" in val:
-                        s = val.split("-")
-                        start = int(s[0])
-                        end = int(s[1])+1
-                        step = 1 if len(s) < 3 else int(s[2])
+                    m = re_range.fullmatch(val)
+                    if m is not None:
+
+                        start = int(m.group(1))
+                        end = int(m.group(2))+1
+                        step = int(m.group(3)) if m.group(3) is not None else 1
+
                         valslist_ext += list(range(start, end, step))
                     else:
                         valslist_ext.append(val)
