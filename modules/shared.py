@@ -1,3 +1,18 @@
+# Digil Diffusion
+#
+# Use model localed at /models/ldm/stable-diffusion-v1/model.ckpt
+#   sd_model_file = "models/ldm/stable-diffusion-v1/model.ckpt"
+#   sd_model_file = os.path.join(script_path, "models/ldm/stable-diffusion-v1/model.ckpt")
+#
+# Set default GFPGAN directory to /GFPGAN
+#   else './GFPGAN'
+#   else os.path.join(script_path, "GFPGAN")
+#
+# Use artits db located at /assets/webui/artists.csv
+#   'artists.csv'
+#   'assets/webui/artists.csv'
+
+
 import sys
 import argparse
 import json
@@ -15,12 +30,12 @@ config_filename = "config.json"
 
 sd_model_file = os.path.join(script_path, 'model.ckpt')
 if not os.path.exists(sd_model_file):
-    sd_model_file = "models/ldm/stable-diffusion-v1/model.ckpt"
+    sd_model_file = os.path.join(script_path, "models/ldm/stable-diffusion-v1/model.ckpt")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, default=os.path.join(sd_path, "configs/stable-diffusion/v1-inference.yaml"), help="path to config which constructs model",)
 parser.add_argument("--ckpt", type=str, default=os.path.join(sd_path, sd_model_file), help="path to checkpoint of model",)
-parser.add_argument("--gfpgan-dir", type=str, help="GFPGAN directory", default=('./src/gfpgan' if os.path.exists('./src/gfpgan') else './GFPGAN'))
+parser.add_argument("--gfpgan-dir", type=str, help="GFPGAN directory", default=('./src/gfpgan' if os.path.exists('./src/gfpgan') else os.path.join(script_path, "GFPGAN")))
 parser.add_argument("--gfpgan-model", type=str, help="GFPGAN model file name", default='GFPGANv1.3.pth')
 parser.add_argument("--no-half", action='store_true', help="do not switch the model to 16-bit floats")
 parser.add_argument("--no-progressbar-hiding", action='store_true', help="do not hide progressbar in gradio UI (we hide it because it slows down ML if you have hardware accleration in browser)")
@@ -72,7 +87,7 @@ class State:
 
 state = State()
 
-artist_db = modules.artists.ArtistsDatabase(os.path.join(script_path, 'artists.csv'))
+artist_db = modules.artists.ArtistsDatabase(os.path.join(script_path, 'assets/webui/artists.csv'))
 
 face_restorers = []
 
