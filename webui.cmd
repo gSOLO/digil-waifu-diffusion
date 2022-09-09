@@ -1,14 +1,13 @@
 @echo off
 
-set PYTHON=python
-set GIT=git
-set COMMANDLINE_ARGS=
-set VENV_DIR=venv
+if not defined PYTHON (set PYTHON=python)
+if not defined GIT (set GIT=git)
+if not defined COMMANDLINE_ARGS (set COMMANDLINE_ARGS=%*)
+if not defined VENV_DIR (set VENV_DIR=venv)
+if not defined TORCH_COMMAND (set TORCH_COMMAND=pip install torch==1.12.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113)
+if not defined REQS_FILE (set REQS_FILE=requirements_versions.txt)
 
 mkdir tmp 2>NUL
-
-set TORCH_COMMAND=pip install torch==1.12.1+cu113 --extra-index-url https://download.pytorch.org/whl/cu113
-set REQS_FILE=requirements_versions.txt
 
 %PYTHON% -c "" >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :check_git
@@ -22,7 +21,7 @@ echo Couldn't launch git
 goto :show_stdout_stderr
 
 :setup_venv
-if [%VENV_DIR%] == [] goto :skip_venv
+if [%VENV_DIR%] == [-] goto :skip_venv
 
 dir %VENV_DIR%\Scripts\Python.exe >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :activate_venv
@@ -35,7 +34,7 @@ echo Unable to create venv in directory %VENV_DIR%
 goto :show_stdout_stderr
 
 :activate_venv
-set PYTHON=%~dp0%VENV_DIR%\Scripts\Python.exe
+set PYTHON="%~dp0%VENV_DIR%\Scripts\Python.exe"
 %PYTHON% --version
 echo venv %PYTHON%
 goto :install_torch
@@ -92,6 +91,7 @@ echo Installing requirements...
 %PYTHON% -m pip install -r %REQS_FILE% --prefer-binary >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :update_numpy
 goto :show_stdout_stderr
+
 :update_numpy
 %PYTHON% -m pip install -U numpy --prefer-binary >tmp/stdout.txt 2>tmp/stderr.txt
 
@@ -105,28 +105,43 @@ if %ERRORLEVEL% == 0 goto :clone_transformers
 goto :show_stdout_stderr
 
 :clone_transformers
-if exist repositories\taming-transformers goto :check_model
+if exist repositories\taming-transformers goto :clone_codeformer
 echo Cloning Taming Transforming repository...
 %GIT% clone https://github.com/CompVis/taming-transformers.git repositories\taming-transformers >tmp/stdout.txt 2>tmp/stderr.txt
+if %ERRORLEVEL% == 0 goto :clone_codeformer
+goto :show_stdout_stderr
+
+:clone_codeformer
+if exist repositories\CodeFormer goto :install_codeformer_reqs
+echo Cloning CodeFormer repository...
+%GIT% clone https://github.com/sczhou/CodeFormer.git repositories\CodeFormer >tmp/stdout.txt 2>tmp/stderr.txt
+if %ERRORLEVEL% == 0 goto :install_codeformer_reqs
+goto :show_stdout_stderr
+
+:install_codeformer_reqs
+%PYTHON% -c "import lpips" >tmp/stdout.txt 2>tmp/stderr.txt
+if %ERRORLEVEL% == 0 goto :check_model
+echo Installing requirements for CodeFormer...
+%PYTHON% -m pip install -r repositories\CodeFormer\requirements.txt --prefer-binary >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :check_model
 goto :show_stdout_stderr
 
+
 :check_model
-dir "models\ldm\stable-diffusion-v1\model.ckpt" >tmp/stdout.txt 2>tmp/stderr.txt
+dir model.ckpt >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :check_gfpgan
-echo Stable Diffusion model not found.
+echo Stable Diffusion model not found: you need to place model.ckpt file into same directory as this file.
 goto :show_stdout_stderr
 
 :check_gfpgan
-dir "GFPGAN\experiments\pretrained_models\GFPGANv1.3.pth" >tmp/stdout.txt 2>tmp/stderr.txt
+dir GFPGANv1.3.pth >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :launch
-echo GFPGAN not found.
+echo GFPGAN not found: you need to place GFPGANv1.3.pth file into same directory as this file.
 echo Face fixing feature will not work.
 
 :launch
 echo Launching webui.py...
-cd repositories\stable-diffusion
-%PYTHON% ../../webui.py %COMMANDLINE_ARGS%
+%PYTHON% webui.py %COMMANDLINE_ARGS%
 pause
 exit /b
 

@@ -19,7 +19,9 @@ from modules.ui import plaintext_to_html
 import modules.scripts
 import modules.processing as processing
 import modules.sd_hijack
-import modules.gfpgan_model as gfpgan
+import modules.codeformer_model
+import modules.gfpgan_model
+import modules.face_restoration
 import modules.realesrgan_model as realesrgan
 import modules.esrgan_model as esrgan
 import modules.images as images
@@ -28,10 +30,12 @@ import modules.txt2img
 import modules.img2img
 
 
+modules.codeformer_model.setup_codeformer()
+modules.gfpgan_model.setup_gfpgan()
+shared.face_restorers.append(modules.face_restoration.FaceRestoration())
+
 esrgan.load_models(cmd_opts.esrgan_models_path)
 realesrgan.setup_realesrgan()
-gfpgan.setup_gfpgan()
-
 
 def load_model_from_config(config, ckpt, verbose=False):
     print(f"Loading model from {ckpt}")
@@ -39,6 +43,7 @@ def load_model_from_config(config, ckpt, verbose=False):
     if "global_step" in pl_sd:
         print(f"Global Step: {pl_sd['global_step']}")
     sd = pl_sd["state_dict"]
+
     model = instantiate_from_config(config.model)
     m, u = model.load_state_dict(sd, strict=False)
     if len(m) > 0 and verbose:
@@ -53,19 +58,29 @@ def load_model_from_config(config, ckpt, verbose=False):
 
 cached_images = {}
 
-def run_extras(image, gfpgan_strength, upscaling_resize, extras_upscaler_1, extras_upscaler_2, extras_upscaler_2_visibility):
+
+def run_extras(image, gfpgan_visibility, codeformer_visibility, codeformer_weight, upscaling_resize, extras_upscaler_1, extras_upscaler_2, extras_upscaler_2_visibility):
     processing.torch_gc()
 
     image = image.convert("RGB")
 
     outpath = opts.outdir_samples or opts.outdir_extras_samples
 
-    if gfpgan.have_gfpgan is not None and gfpgan_strength > 0:
-        restored_img = gfpgan.gfpgan_fix_faces(np.array(image, dtype=np.uint8))
+    if gfpgan_visibility > 0:
+        restored_img = modules.gfpgan_model.gfpgan_fix_faces(np.array(image, dtype=np.uint8))
         res = Image.fromarray(restored_img)
 
-        if gfpgan_strength < 1.0:
-            res = Image.blend(image, res, gfpgan_strength)
+        if gfpgan_visibility < 1.0:
+            res = Image.blend(image, res, gfpgan_visibility)
+
+        image = res
+
+    if codeformer_visibility > 0:
+        restored_img = modules.codeformer_model.codeformer.restore(np.array(image, dtype=np.uint8), w=codeformer_weight)
+        res = Image.fromarray(restored_img)
+
+        if codeformer_visibility < 1.0:
+            res = Image.blend(image, res, codeformer_visibility)
 
         image = res
 
@@ -73,7 +88,7 @@ def run_extras(image, gfpgan_strength, upscaling_resize, extras_upscaler_1, extr
         def upscale(image, scaler_index, resize):
             small = image.crop((image.width // 2, image.height // 2, image.width // 2 + 10, image.height // 2 + 10))
             pixels = tuple(np.array(small).flatten().tolist())
-            key = (resize, scaler_index, image.width, image.height) + pixels
+            key = (resize, scaler_index, image.width, image.height, gfpgan_visibility, codeformer_visibility, codeformer_weight) + pixels
 
             c = cached_images.get(key)
             if c is None:
@@ -121,15 +136,24 @@ queue_lock = threading.Lock()
 
 def wrap_gradio_gpu_call(func):
     def f(*args, **kwargs):
+        shared.state.sampling_step = 0
+        shared.state.job_count = -1
+        shared.state.job_no = 0
+        shared.state.current_latent = None
+        shared.state.current_image = None
+        shared.state.current_image_sampling_step = 0
+
         with queue_lock:
             res = func(*args, **kwargs)
 
         shared.state.job = ""
+        shared.state.job_count = 0
 
         return res
 
     return modules.ui.wrap_gradio_call(f)
 
+modules.scripts.load_scripts(os.path.join(script_path, "scripts"))
 
 try:
     # this silences the annoying "Some weights of the model checkpoint were not used when initializing..." message at start.
@@ -151,22 +175,23 @@ else:
 
 modules.sd_hijack.model_hijack.hijack(shared.sd_model)
 
-modules.scripts.load_scripts(os.path.join(script_path, "scripts/webui"))
 
+def webui():
+    # make the program just exit at ctrl+c without waiting for anything
+    def sigint_handler(sig, frame):
+        print(f'Interrupted with signal {sig} in {frame}')
+        os._exit(0)
 
-# make the program just exit at ctrl+c without waiting for anything
-def sigint_handler(sig, frame):
-    print(f'Interrupted with singal {sig} in {frame}')
-    os._exit(0)
+    signal.signal(signal.SIGINT, sigint_handler)
 
+    demo = modules.ui.create_ui(
+        txt2img=wrap_gradio_gpu_call(modules.txt2img.txt2img),
+        img2img=wrap_gradio_gpu_call(modules.img2img.img2img),
+        run_extras=wrap_gradio_gpu_call(run_extras),
+        run_pnginfo=run_pnginfo
+    )
 
-signal.signal(signal.SIGINT, sigint_handler)
+    demo.launch(share=cmd_opts.share, server_name="0.0.0.0" if cmd_opts.listen else None, server_port=cmd_opts.port)
 
-demo = modules.ui.create_ui(
-    txt2img=wrap_gradio_gpu_call(modules.txt2img.txt2img),
-    img2img=wrap_gradio_gpu_call(modules.img2img.img2img),
-    run_extras=wrap_gradio_gpu_call(run_extras),
-    run_pnginfo=run_pnginfo
-)
-
-demo.launch(share=cmd_opts.share, server_name="0.0.0.0" if cmd_opts.listen else None)
+if __name__ == "__main__":
+    webui()
