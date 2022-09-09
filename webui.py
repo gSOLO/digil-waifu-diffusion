@@ -1,3 +1,10 @@
+# Digil Diffusion
+#
+# Load scripts from /scripts/webui
+#   "scripts"
+#   "scripts/webui"
+
+
 import os
 import threading
 
@@ -153,7 +160,7 @@ def wrap_gradio_gpu_call(func):
 
     return modules.ui.wrap_gradio_call(f)
 
-modules.scripts.load_scripts(os.path.join(script_path, "scripts"))
+modules.scripts.load_scripts(os.path.join(script_path, "scripts/webui"))
 
 try:
     # this silences the annoying "Some weights of the model checkpoint were not used when initializing..." message at start.

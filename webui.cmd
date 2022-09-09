@@ -1,3 +1,25 @@
+:: Digil Diffusion
+::
+:: Check model at /models/ldm/stable-diffusion-v1/model.ckpt
+::
+::	model.ckpt
+::	"models\ldm\stable-diffusion-v1\model.ckpt"
+::
+::	Stable Diffusion model not found: you need to place model.ckpt file into same directory as this file.
+::	Stable Diffusion model not found.
+::
+:: Check GFPGAN model at /GFPGAN/experiments/pretrained_models/GFPGANv1.3.pth
+::
+::	GFPGANv1.3.pth
+::	"GFPGAN\experiments\pretrained_models\GFPGANv1.3.pth"
+::
+::	GFPGAN not found: you need to place GFPGANv1.3.pth file into same directory as this file.
+::	GFPGAN not found.
+::
+:: Activate Conda
+call C:\ProgramData\Miniconda3\Scripts\activate.bat	 
+
+ 
 @echo off
 
 if not defined PYTHON (set PYTHON=python)
@@ -128,15 +150,15 @@ goto :show_stdout_stderr
 
 
 :check_model
-dir model.ckpt >tmp/stdout.txt 2>tmp/stderr.txt
+dir "models\ldm\stable-diffusion-v1\model.ckpt" >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :check_gfpgan
-echo Stable Diffusion model not found: you need to place model.ckpt file into same directory as this file.
+echo Stable Diffusion model not found.
 goto :show_stdout_stderr
 
 :check_gfpgan
-dir GFPGANv1.3.pth >tmp/stdout.txt 2>tmp/stderr.txt
+dir "GFPGAN\experiments\pretrained_models\GFPGANv1.3.pth" >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :launch
-echo GFPGAN not found: you need to place GFPGANv1.3.pth file into same directory as this file.
+echo GFPGAN not found.
 echo Face fixing feature will not work.
 
 :launch
