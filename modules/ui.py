@@ -1,3 +1,14 @@
+# Digil Diffusion
+#
+# Use styles located at /assets/webui/style.css
+#   "style.css"
+#   "assets/webui/style.css"
+#
+# Use script located at /assets/webui/script.js
+#   "script.js"
+#   "assets/webui/script.js"
+
+
 import base64
 import html
 import io
@@ -9,6 +20,8 @@ import sys
 import time
 import traceback
 
+import numpy as np
+import torch
 from PIL import Image
 
 import gradio as gr
@@ -19,9 +32,10 @@ from modules.paths import script_path
 from modules.shared import opts, cmd_opts
 import modules.shared as shared
 from modules.sd_samplers import samplers, samplers_for_img2img
-import modules.gfpgan_model as gfpgan
 import modules.realesrgan_model as realesrgan
 import modules.scripts
+import modules.gfpgan_model
+import modules.codeformer_model
 
 # this is a fix for Windows users. Without it, javascript files will be served with text/html content-type and the bowser will not show any UI
 mimetypes.init()
@@ -47,7 +61,6 @@ css_hide_progressbar = """
 .progress-bar { display:none!important; }
 .meta-text { display:none!important; }
 """
-
 
 def plaintext_to_html(text):
     text = "".join([f"<p>{html.escape(x)}</p>\n" for x in text.split('\n')])
@@ -120,6 +133,9 @@ def wrap_gradio_call(func):
             print("Arguments:", args, kwargs, file=sys.stderr)
             print(traceback.format_exc(), file=sys.stderr)
 
+            shared.state.job = ""
+            shared.state.job_count = 0
+
             res = [None, '', f"<div class='error'>{plaintext_to_html(type(e).__name__+': '+str(e))}</div>"]
 
         elapsed = time.perf_counter() - t
@@ -132,6 +148,44 @@ def wrap_gradio_call(func):
         return tuple(res)
 
     return f
+
+
+def check_progress_call():
+
+    if shared.state.job_count == 0:
+        return "", gr_show(False), gr_show(False)
+
+    progress = 0
+
+    if shared.state.job_count > 0:
+        progress += shared.state.job_no / shared.state.job_count
+    if shared.state.sampling_steps > 0:
+        progress += 1 / shared.state.job_count * shared.state.sampling_step / shared.state.sampling_steps
+
+    progress = min(progress, 1)
+
+    progressbar = ""
+    if opts.show_progressbar:
+        progressbar = f"""<div class='progressDiv'><div class='progress' style="width:{progress * 100}%">{str(int(progress*100))+"%" if progress > 0.01 else ""}</div></div>"""
+
+    image = gr_show(False)
+    preview_visibility = gr_show(False)
+
+    if opts.show_progress_every_n_steps > 0:
+        if shared.parallel_processing_allowed:
+
+            if shared.state.sampling_step - shared.state.current_image_sampling_step >= opts.show_progress_every_n_steps and shared.state.current_latent is not None:
+                shared.state.current_image = modules.sd_samplers.sample_to_image(shared.state.current_latent)
+                shared.state.current_image_sampling_step = shared.state.sampling_step
+
+        image = shared.state.current_image
+
+        if image is None or progress >= 1:
+            image = gr.update(value=None)
+        else:
+            preview_visibility = gr_show(True)
+
+    return f"<span style='display: none'>{time.time()}</span><p>{progressbar}</p>", preview_visibility, image
 
 
 def roll_artist(prompt):
@@ -154,8 +208,9 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
         with gr.Row():
             prompt = gr.Textbox(label="Prompt", elem_id="txt2img_prompt", show_label=False, placeholder="Prompt", lines=1)
             negative_prompt = gr.Textbox(label="Negative prompt", elem_id="txt2img_negative_prompt", show_label=False, placeholder="Negative prompt", lines=1, visible=False)
-            roll = gr.Button('Roll', elem_id="txt2img_roll", visible=len(shared.artist_db.artists)>0)
+            roll = gr.Button('Roll', elem_id="txt2img_roll", visible=len(shared.artist_db.artists) > 0)
             submit = gr.Button('Generate', elem_id="txt2img_generate", variant='primary')
+            check_progress = gr.Button('Check progress', elem_id="check_progress", visible=False)
 
         with gr.Row().style(equal_height=False):
             with gr.Column(variant='panel'):
@@ -163,7 +218,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                 sampler_index = gr.Radio(label='Sampling method', elem_id="txt2img_sampling", choices=[x.name for x in samplers], value=samplers[0].name, type="index")
 
                 with gr.Row():
-                    use_gfpgan = gr.Checkbox(label='GFPGAN', value=False, visible=gfpgan.have_gfpgan)
+                    restore_faces = gr.Checkbox(label='Restore faces', value=False, visible=len(shared.face_restorers) > 1)
                     tiling = gr.Checkbox(label='Tiling', value=False)
 
                 with gr.Row():
@@ -183,7 +238,9 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
 
             with gr.Column(variant='panel'):
                 with gr.Group():
-                    txt2img_gallery = gr.Gallery(label='Output', elem_id='txt2img_gallery')
+                    txt2img_preview = gr.Image(elem_id='txt2img_preview', visible=False)
+                    txt2img_gallery = gr.Gallery(label='Output', elem_id='txt2img_gallery').style(grid=4)
+
 
                 with gr.Group():
                     with gr.Row():
@@ -193,18 +250,22 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                         send_to_extras = gr.Button('Send to extras')
                         interrupt = gr.Button('Interrupt')
 
+                progressbar = gr.HTML(elem_id="progressbar")
+
                 with gr.Group():
                     html_info = gr.HTML()
                     generation_info = gr.Textbox(visible=False)
 
+
             txt2img_args = dict(
                 fn=txt2img,
+                _js="submit",
                 inputs=[
                     prompt,
                     negative_prompt,
                     steps,
                     sampler_index,
-                    use_gfpgan,
+                    restore_faces,
                     tiling,
                     batch_count,
                     batch_size,
@@ -222,6 +283,14 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
 
             prompt.submit(**txt2img_args)
             submit.click(**txt2img_args)
+
+            check_progress.click(
+                fn=check_progress_call,
+                show_progress=False,
+                inputs=[],
+                outputs=[progressbar, txt2img_preview, txt2img_preview],
+            )
+
 
             interrupt.click(
                 fn=lambda: shared.state.interrupt(),
@@ -252,10 +321,12 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                 ]
             )
 
+
     with gr.Blocks(analytics_enabled=False) as img2img_interface:
         with gr.Row():
             prompt = gr.Textbox(label="Prompt", elem_id="img2img_prompt", show_label=False, placeholder="Prompt", lines=1)
             submit = gr.Button('Generate', elem_id="img2img_generate", variant='primary')
+            check_progress = gr.Button('Check progress', elem_id="check_progress", visible=False)
 
         with gr.Row().style(equal_height=False):
 
@@ -263,7 +334,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                 with gr.Group():
                     switch_mode = gr.Radio(label='Mode', elem_id="img2img_mode", choices=['Redraw whole image', 'Inpaint a part of image', 'Loopback', 'SD upscale'], value='Redraw whole image', type="index", show_label=False)
                     init_img = gr.Image(label="Image for img2img", source="upload", interactive=True, type="pil")
-                    init_img_with_mask = gr.Image(label="Image for inpainting with mask", elem_id="img2maskimg", source="upload", interactive=True, type="pil", tool="sketch", visible=False)
+                    init_img_with_mask = gr.Image(label="Image for inpainting with mask", elem_id="img2maskimg", source="upload", interactive=True, type="pil", tool="sketch", visible=False, image_mode="RGBA")
                     resize_mode = gr.Radio(label="Resize mode", show_label=False, choices=["Just resize", "Crop and resize", "Resize and fill"], type="index", value="Just resize")
 
                 steps = gr.Slider(minimum=1, maximum=150, step=1, label="Sampling Steps", value=20)
@@ -276,7 +347,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     inpainting_mask_invert = gr.Radio(label='Masking mode', choices=['Inpaint masked', 'Inpaint not masked'], value='Inpaint masked', type="index", visible=False)
 
                 with gr.Row():
-                    use_gfpgan = gr.Checkbox(label='GFPGAN', value=False, visible=gfpgan.have_gfpgan)
+                    restore_faces = gr.Checkbox(label='Restore faces', value=False, visible=len(shared.face_restorers) > 1)
                     tiling = gr.Checkbox(label='Tiling', value=False)
                     sd_upscale_overlap = gr.Slider(minimum=0, maximum=256, step=16, label='Tile overlap', value=64, visible=False)
 
@@ -289,7 +360,8 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
 
                 with gr.Group():
                     cfg_scale = gr.Slider(minimum=1.0, maximum=15.0, step=0.5, label='CFG Scale', value=7.0)
-                    denoising_strength = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising Strength', value=0.75)
+                    denoising_strength = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising strength', value=0.75)
+                    denoising_strength_change_factor = gr.Slider(minimum=0.9, maximum=1.1, step=0.01, label='Denoising strength change factor', value=1, visible=False)
 
                 with gr.Group():
                     height = gr.Slider(minimum=64, maximum=2048, step=64, label="Height", value=512)
@@ -302,13 +374,18 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
 
             with gr.Column(variant='panel'):
                 with gr.Group():
-                    img2img_gallery = gr.Gallery(label='Output', elem_id='img2img_gallery')
+                    img2img_preview = gr.Image(elem_id='img2img_preview', visible=False)
+                    img2img_gallery = gr.Gallery(label='Output', elem_id='img2img_gallery').style(grid=4)
 
                 with gr.Group():
                     with gr.Row():
-                        interrupt = gr.Button('Interrupt')
                         save = gr.Button('Save')
+                        img2img_send_to_img2img = gr.Button('Send to img2img')
+                        img2img_send_to_inpaint = gr.Button('Send to inpaint')
                         img2img_send_to_extras = gr.Button('Send to extras')
+                        interrupt = gr.Button('Interrupt')
+
+                progressbar = gr.HTML(elem_id="progressbar")
 
                 with gr.Group():
                     html_info = gr.HTML()
@@ -331,6 +408,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     sd_upscale_overlap: gr_show(is_upscale),
                     inpaint_full_res: gr_show(is_inpaint),
                     inpainting_mask_invert: gr_show(is_inpaint),
+                    denoising_strength_change_factor: gr_show(is_loopback),
                 }
 
             switch_mode.change(
@@ -347,11 +425,13 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     sd_upscale_overlap,
                     inpaint_full_res,
                     inpainting_mask_invert,
+                    denoising_strength_change_factor,
                 ]
             )
 
             img2img_args = dict(
                 fn=img2img,
+                _js="submit",
                 inputs=[
                     prompt,
                     init_img,
@@ -360,13 +440,14 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     sampler_index,
                     mask_blur,
                     inpainting_fill,
-                    use_gfpgan,
+                    restore_faces,
                     tiling,
                     switch_mode,
                     batch_count,
                     batch_size,
                     cfg_scale,
                     denoising_strength,
+                    denoising_strength_change_factor,
                     seed,
                     height,
                     width,
@@ -385,6 +466,13 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
 
             prompt.submit(**img2img_args)
             submit.click(**img2img_args)
+
+            check_progress.click(
+                fn=check_progress_call,
+                show_progress=False,
+                inputs=[],
+                outputs=[progressbar, img2img_preview, img2img_preview],
+            )
 
             interrupt.click(
                 fn=lambda: shared.state.interrupt(),
@@ -419,6 +507,20 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                 outputs=[init_img_with_mask],
             )
 
+            img2img_send_to_img2img.click(
+                fn=lambda x: image_from_url_text(x),
+                _js="extract_image_from_gallery",
+                inputs=[img2img_gallery],
+                outputs=[init_img],
+            )
+
+            img2img_send_to_inpaint.click(
+                fn=lambda x: image_from_url_text(x),
+                _js="extract_image_from_gallery",
+                inputs=[img2img_gallery],
+                outputs=[init_img_with_mask],
+            )
+
     with gr.Blocks(analytics_enabled=False) as extras_interface:
         with gr.Row().style(equal_height=False):
             with gr.Column(variant='panel'):
@@ -435,7 +537,11 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     extras_upscaler_2_visibility = gr.Slider(minimum=0.0, maximum=1.0, step=0.001, label="Upscaler 2 visibility", value=1)
 
                 with gr.Group():
-                    gfpgan_strength = gr.Slider(minimum=0.0, maximum=1.0, step=0.001, label="GFPGAN strength", value=0, interactive=gfpgan.have_gfpgan)
+                    gfpgan_visibility = gr.Slider(minimum=0.0, maximum=1.0, step=0.001, label="GFPGAN visibility", value=0, interactive=modules.gfpgan_model.have_gfpgan)
+
+                with gr.Group():
+                    codeformer_visibility = gr.Slider(minimum=0.0, maximum=1.0, step=0.001, label="CodeFormer visibility", value=0, interactive=modules.codeformer_model.have_codeformer)
+                    codeformer_weight = gr.Slider(minimum=0.0, maximum=1.0, step=0.001, label="CodeFormer weight (0 = maximum effect, 1 = minimum effect)", value=0, interactive=modules.codeformer_model.have_codeformer)
 
                 submit = gr.Button('Generate', elem_id="extras_generate", variant='primary')
 
@@ -448,7 +554,9 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
             fn=run_extras,
             inputs=[
                 image,
-                gfpgan_strength,
+                gfpgan_visibility,
+                codeformer_visibility,
+                codeformer_weight,
                 upscaling_resize,
                 extras_upscaler_1,
                 extras_upscaler_2,
@@ -499,7 +607,8 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
         t = type(info.default)
 
         if info.component is not None:
-            item = info.component(label=info.label, value=fun, **(info.component_args or {}))
+            args = info.component_args() if callable(info.component_args) else info.component_args
+            item = info.component(label=info.label, value=fun, **(args or {}))
         elif t == str:
             item = gr.Textbox(label=info.label, value=fun, lines=1)
         elif t == int:

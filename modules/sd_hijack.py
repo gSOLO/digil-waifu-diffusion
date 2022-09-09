@@ -73,11 +73,21 @@ class StableDiffusionModelHijack:
             name = os.path.splitext(filename)[0]
 
             data = torch.load(path)
-            param_dict = data['string_to_param']
-            if hasattr(param_dict, '_parameters'):
-                param_dict = getattr(param_dict, '_parameters')  # fix for torch 1.12.1 loading saved file from torch 1.11
-            assert len(param_dict) == 1, 'embedding file has multiple terms in it'
-            emb = next(iter(param_dict.items()))[1]
+
+            # textual inversion embeddings
+            if 'string_to_param' in data:
+                param_dict = data['string_to_param']
+                if hasattr(param_dict, '_parameters'):
+                    param_dict = getattr(param_dict, '_parameters')  # fix for torch 1.12.1 loading saved file from torch 1.11
+                assert len(param_dict) == 1, 'embedding file has multiple terms in it'
+                emb = next(iter(param_dict.items()))[1]
+            elif type(data) == dict and type(next(iter(data.values()))) == torch.Tensor:
+                assert len(data.keys()) == 1, 'embedding file has multiple terms in it'
+
+                emb = next(iter(data.values()))
+                if len(emb.shape) == 1:
+                    emb = emb.unsqueeze(0)
+
             self.word_embeddings[name] = emb.detach()
             self.word_embeddings_checksums[name] = f'{const_hash(emb.reshape(-1))&0xffff:04x}'
 
@@ -232,7 +242,7 @@ class FrozenCLIPEmbedderWithCustomWords(torch.nn.Module):
         z = outputs.last_hidden_state
 
         # restoring original mean is likely not correct, but it seems to work well to prevent artifacts that happen otherwise
-        batch_multipliers = torch.asarray(np.array(batch_multipliers)).to(device)
+        batch_multipliers = torch.asarray(batch_multipliers).to(device)
         original_mean = z.mean()
         z *= batch_multipliers.reshape(batch_multipliers.shape + (1,)).expand(z.shape)
         new_mean = z.mean()
