@@ -42,7 +42,7 @@ Model Link: https://huggingface.co/hakurei/waifu-diffusion
 [Training Guide](https://github.com/harubaru/waifu-diffusion/blob/main/docs/en/training/README.md)
 
 
-## Web UI, GFPGAN, and Real-ESRGAN
+## Web UI, GFPGAN, Real-ESRGAN, ESRGAN, and More
 
 Has an implemetation of both the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui) *(webui.cmd)* and [hlky Web UI](https://github.com/hlky/stable-diffusion-webui) *(hlkyui.cmd)* to drive a number of settings and additional features (e.x. [GFPGAN](https://github.com/gSOLO/GFPGAN) for face fixing, and [Real-ESRGAN](https://github.com/gSOLO/Real-ESRGAN) for upscaling).
 
@@ -76,6 +76,9 @@ Has an implemetation of both the [AUTOMATIC1111 Web UI](https://github.com/AUTOM
 - Running custom code from UI
 - Mouseover hints fo most UI elements
 - Possible to change defaults/mix/max/step values for UI elements via text config
+- Random artist button
+- Tiling support: UI checkbox to create images that can be tiled like textures
+- Progress bar and live image generation preview
   
 ## Requirements
 A suitable [conda](https://conda.io/) environment named `ldm` can be created

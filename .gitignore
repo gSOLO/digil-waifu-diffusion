@@ -69,6 +69,7 @@ src/taming-transformers/
 /ui-config.json
 \!outputs.lnk
 docs/*
+log/*
 
 # Obsidian
 .obsidian/
