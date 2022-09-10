@@ -7,12 +7,7 @@
 
 Waifu Diffusion is the name for the project of finetuning Stable Diffusion on Danbooru images.
 
-<img src=https://cdn.discordapp.com/attachments/872361510133981234/1016022078635388979/unknown.png?3867929 width=40% height=40%>
-
-<sub>Prompt: touhou 1girl komeiji_koishi portrait</sub>
-
 Model Link: https://huggingface.co/hakurei/waifu-diffusion  
-
 
 [Training Guide](https://github.com/harubaru/waifu-diffusion/blob/main/docs/en/training/README.md)
 
