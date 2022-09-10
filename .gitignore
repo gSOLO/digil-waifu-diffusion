@@ -71,5 +71,10 @@ src/taming-transformers/
 docs/
 log/*
 
+# App Icon and Start Menu Shortcut
+assets/StabilityAi_Logo_Emoij.ico
+assets/StabilityAi_Logo_Emoij.png
+Digil Diffusion.lnk
+
 # Obsidian
 .obsidian/
