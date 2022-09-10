@@ -11,7 +11,6 @@ Waifu Diffusion is the name for the project of finetuning Stable Diffusion on Da
 
 <sub>Prompt: touhou 1girl komeiji_koishi portrait</sub>
 
-
 Model Link: https://huggingface.co/hakurei/waifu-diffusion  
 
 
