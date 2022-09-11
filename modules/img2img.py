@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageOps, ImageChops
 
+from modules import devices
 from modules.processing import Processed, StableDiffusionProcessingImg2Img, process_images
 from modules.shared import opts, state
 import modules.shared as shared
@@ -11,16 +12,21 @@ from modules.ui import plaintext_to_html
 import modules.images as images
 import modules.scripts
 
-def img2img(prompt: str, init_img, init_img_with_mask, steps: int, sampler_index: int, mask_blur: int, inpainting_fill: int, restore_faces: bool, tiling: bool, mode: int, n_iter: int, batch_size: int, cfg_scale: float, denoising_strength: float, denoising_strength_change_factor: float, seed: int, height: int, width: int, resize_mode: int, upscaler_index: str, upscale_overlap: int, inpaint_full_res: bool, inpainting_mask_invert: int, *args):
+def img2img(prompt: str, negative_prompt: str, prompt_style: str, init_img, init_img_with_mask, init_mask, mask_mode, steps: int, sampler_index: int, mask_blur: int, inpainting_fill: int, restore_faces: bool, tiling: bool, mode: int, n_iter: int, batch_size: int, cfg_scale: float, denoising_strength: float, denoising_strength_change_factor: float, seed: int, subseed: int, subseed_strength: float, seed_resize_from_h: int, seed_resize_from_w: int, height: int, width: int, resize_mode: int, upscaler_index: str, upscale_overlap: int, inpaint_full_res: bool, inpainting_mask_invert: int, *args):
     is_inpaint = mode == 1
     is_loopback = mode == 2
     is_upscale = mode == 3
 
     if is_inpaint:
-        image = init_img_with_mask['image']
-        alpha_mask = ImageOps.invert(image.split()[-1]).convert('L').point(lambda x: 255 if x > 0 else 0, mode='1')
-        mask = ImageChops.lighter(alpha_mask, init_img_with_mask['mask'].convert('L')).convert('RGBA')
-        image = image.convert('RGB')
+        if mask_mode == 0:
+            image = init_img_with_mask['image']
+            mask = init_img_with_mask['mask']
+            alpha_mask = ImageOps.invert(image.split()[-1]).convert('L').point(lambda x: 255 if x > 0 else 0, mode='1')
+            mask = ImageChops.lighter(alpha_mask, mask.convert('L')).convert('L')
+            image = image.convert('RGB')
+        else:
+            image = init_img
+            mask = init_mask
     else:
         image = init_img
         mask = None
@@ -32,7 +38,13 @@ def img2img(prompt: str, init_img, init_img_with_mask, steps: int, sampler_index
         outpath_samples=opts.outdir_samples or opts.outdir_img2img_samples,
         outpath_grids=opts.outdir_grids or opts.outdir_img2img_grids,
         prompt=prompt,
+        negative_prompt=negative_prompt,
+        prompt_style=prompt_style,
         seed=seed,
+        subseed=subseed,
+        subseed_strength=subseed_strength,
+        seed_resize_from_h=seed_resize_from_h,
+        seed_resize_from_w=seed_resize_from_w,
         sampler_index=sampler_index,
         batch_size=batch_size,
         n_iter=n_iter,
@@ -52,7 +64,7 @@ def img2img(prompt: str, init_img, init_img_with_mask, steps: int, sampler_index
         inpainting_mask_invert=inpainting_mask_invert,
         extra_generation_params={
             "Denoising strength": denoising_strength,
-            "Denoising strength change factor": denoising_strength_change_factor
+            "Denoising strength change factor": (denoising_strength_change_factor if is_loopback else None)
         }
     )
     print(f"\nimg2img: {prompt}", file=shared.progress_print_out)
@@ -74,7 +86,6 @@ def img2img(prompt: str, init_img, init_img_with_mask, steps: int, sampler_index
 
 
         for i in range(n_iter):
-
             if do_color_correction and i == 0:
                 correction_target = cv2.cvtColor(np.asarray(init_img.copy()), cv2.COLOR_RGB2LAB)
 
@@ -113,57 +124,65 @@ def img2img(prompt: str, init_img, init_img_with_mask, steps: int, sampler_index
         processed = Processed(p, history, initial_seed, initial_info)
 
     elif is_upscale:
-        initial_seed = None
         initial_info = None
+
+        processing.fix_seed(p)
+        seed = p.seed
 
         upscaler = shared.sd_upscalers[upscaler_index]
         img = upscaler.upscale(init_img, init_img.width * 2, init_img.height * 2)
 
-        processing.torch_gc()
+        devices.torch_gc()
 
         grid = images.split_grid(img, tile_w=width, tile_h=height, overlap=upscale_overlap)
 
+        upscale_count = p.n_iter
         p.n_iter = 1
         p.do_not_save_grid = True
         p.do_not_save_samples = True
 
         work = []
-        work_results = []
 
         for y, h, row in grid.tiles:
             for tiledata in row:
                 work.append(tiledata[2])
 
         batch_count = math.ceil(len(work) / p.batch_size)
-        print(f"SD upscaling will process a total of {len(work)} images tiled as {len(grid.tiles[0][2])}x{len(grid.tiles)} in a total of {batch_count} batches.")
+        state.job_count = batch_count * upscale_count
 
-        state.job_count = batch_count
+        print(f"SD upscaling will process a total of {len(work)} images tiled as {len(grid.tiles[0][2])}x{len(grid.tiles)} per upscale in a total of {state.job_count} batches.")
 
-        for i in range(batch_count):
-            p.init_images = work[i*p.batch_size:(i+1)*p.batch_size]
+        result_images = []
+        for n in range(upscale_count):
+            start_seed = seed + n
+            p.seed = start_seed
 
-            state.job = f"Batch {i + 1} out of {batch_count}"
-            processed = process_images(p)
+            work_results = []
+            for i in range(batch_count):
+                p.init_images = work[i*p.batch_size:(i+1)*p.batch_size]
 
-            if initial_seed is None:
-                initial_seed = processed.seed
-                initial_info = processed.info
+                state.job = f"Batch {i + 1} out of {state.job_count}"
+                processed = process_images(p)
 
-            p.seed = processed.seed + 1
-            work_results += processed.images
+                if initial_info is None:
+                    initial_info = processed.info
 
-        image_index = 0
-        for y, h, row in grid.tiles:
-            for tiledata in row:
-                tiledata[2] = work_results[image_index] if image_index < len(work_results) else Image.new("RGB", (p.width, p.height))
-                image_index += 1
+                p.seed = processed.seed + 1
+                work_results += processed.images
 
-        combined_image = images.combine_grid(grid)
+            image_index = 0
+            for y, h, row in grid.tiles:
+                for tiledata in row:
+                    tiledata[2] = work_results[image_index] if image_index < len(work_results) else Image.new("RGB", (p.width, p.height))
+                    image_index += 1
 
-        if opts.samples_save:
-            images.save_image(combined_image, p.outpath_samples, "", initial_seed, prompt, opts.grid_format, info=initial_info)
+            combined_image = images.combine_grid(grid)
+            result_images.append(combined_image)
 
-        processed = Processed(p, [combined_image], initial_seed, initial_info)
+            if opts.samples_save:
+                images.save_image(combined_image, p.outpath_samples, "", start_seed, prompt, opts.samples_format, info=initial_info)
+
+        processed = Processed(p, result_images, seed, initial_info)
 
     else:
 
