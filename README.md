@@ -21,7 +21,7 @@ Has an implemetation of both the [AUTOMATIC1111 Web UI](https://github.com/AUTOM
 [<font size="12">Detailed feature showcase with images, art by Greg Rutkowski</font>](https://github.com/AUTOMATIC1111/stable-diffusion-webui-feature-showcase)
 
 - Original txt2img and img2img modes
-- One click install and run script (but you still must install python, git and CUDA)
+- One click install and run script (but you still must install python and git)
 - Outpainting
 - Inpainting
 - Prompt matrix
@@ -49,6 +49,11 @@ Has an implemetation of both the [AUTOMATIC1111 Web UI](https://github.com/AUTOM
 - Random artist button
 - Tiling support: UI checkbox to create images that can be tiled like textures
 - Progress bar and live image generation preview
+- Negative prompt
+- Styles
+- Variations
+- Seed resizing
+- CLIP interrogator
 
 ## Stable Diffusion
 
