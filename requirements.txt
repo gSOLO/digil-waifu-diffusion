@@ -1,4 +1,4 @@
-numpy==1.19.2
+numpy==1.23.3
 albumentations==0.4.3
 opencv-python==4.1.2.30
 pudb==2019.2
@@ -21,6 +21,12 @@ realesrgan
 torch
 pytorch_lightning
 scikit-image
+fonts
+font-roboto
+timm==0.4.12
+fairscale==0.4.4
+git+https://github.com/crowsonkb/k-diffusion.git
+git+https://github.com/TencentARC/GFPGAN.git
 git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
 git+https://github.com/openai/CLIP.git@main#egg=clip
 git+https://github.com/hlky/k-diffusion-sd#egg=k_diffusion

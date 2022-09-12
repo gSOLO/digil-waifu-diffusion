@@ -59,6 +59,11 @@ ESRGAN/
 GFPGAN/
 LDSR/
 RealESRGAN/
+
+# WebUI
+/ui-config.json
+assets/webui/styles.csv
+assets/webui/styles.csv.bak
 src/clip/
 src/taming-transformers/
 /repositories
@@ -66,12 +71,12 @@ src/taming-transformers/
 /tmp
 /model.ckpt
 /GFPGANv1.3.pth
-/ui-config.json
-\!outputs.lnk
 docs/
 log/*
+/interrogate
 
 # App Icon and Start Menu Shortcut
+\!outputs.lnk
 assets/StabilityAi_Logo_Emoij.ico
 assets/StabilityAi_Logo_Emoij.png
 Digil Diffusion.lnk

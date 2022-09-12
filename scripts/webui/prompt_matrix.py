@@ -50,7 +50,7 @@ class Script(scripts.Script):
         return [put_at_start]
 
     def run(self, p, put_at_start):
-        seed = modules.processing.set_seed(p.seed)
+        modules.processing.fix_seed(p)
 
         original_prompt = p.prompt[0] if type(p.prompt) == list else p.prompt
 
@@ -73,8 +73,8 @@ class Script(scripts.Script):
         print(f"Prompt matrix will create {len(all_prompts)} images using a total of {p.n_iter} batches.")
 
         p.prompt = all_prompts
+        p.seed = [p.seed for _ in all_prompts]
         p.prompt_for_display = original_prompt
-        p.seed = len(all_prompts) * [seed]
         processed = process_images(p)
 
         grid = images.image_grid(processed.images, p.batch_size, rows=1 << ((len(prompt_matrix_parts) - 1) // 2))
@@ -82,6 +82,6 @@ class Script(scripts.Script):
         processed.images.insert(0, grid)
 
         if opts.grid_save:
-            images.save_image(processed.images[0], p.outpath_grids, "prompt_matrix", prompt=original_prompt, seed=seed)
+            images.save_image(processed.images[0], p.outpath_grids, "prompt_matrix", prompt=original_prompt, seed=processed.seed)
 
         return processed

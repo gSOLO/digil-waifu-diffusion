@@ -11,6 +11,10 @@
 # Use artits db located at /assets/webui/artists.csv
 #   'artists.csv'
 #   'assets/webui/artists.csv'
+#
+# Save styles in /assets/webui/styles.csv
+#   'styles.csv'
+#   'assets/webui/styles.csv'
 
 
 import sys
@@ -24,7 +28,9 @@ import tqdm
 
 import modules.artists
 from modules.paths import script_path, sd_path
-import modules.codeformer_model
+from modules.devices import get_optimal_device
+import modules.styles
+import modules.interrogate
 
 config_filename = "config.json"
 
@@ -50,16 +56,16 @@ parser.add_argument("--precision", type=str, help="evaluate at this precision", 
 parser.add_argument("--share", action='store_true', help="use share=True for gradio and make the UI accessible through their site (doesn't work for me but you might have better luck)")
 parser.add_argument("--esrgan-models-path", type=str, help="path to directory with ESRGAN models", default=os.path.join(script_path, 'ESRGAN'))
 parser.add_argument("--opt-split-attention", action='store_true', help="enable optimization that reduce vram usage by a lot for about 10%% decrease in performance")
+parser.add_argument("--opt-split-attention-v1", action='store_true', help="enable older version of --opt-split-attention optimization")
 parser.add_argument("--listen", action='store_true', help="launch gradio with 0.0.0.0 as server name, allowing to respond to network requests")
 parser.add_argument("--port", type=int, help="launch gradio with given server port, you need root/admin rights for ports < 1024, defaults to 7860 if available", default=None)
+parser.add_argument("--show-negative-prompt", action='store_true', help="does not do anything", default=False)
+parser.add_argument("--ui-config-file", type=str, help="filename to use for ui configuration", default=os.path.join(script_path, 'ui-config.json'))
+
 cmd_opts = parser.parse_args()
 
-if torch.has_cuda:
-    device = torch.device("cuda")
-elif torch.has_mps:
-    device = torch.device("mps")
-else:
-    device = torch.device("cpu")
+device = get_optimal_device()
+
 batch_cond_uncond = cmd_opts.always_batch_cond_uncond or not (cmd_opts.lowvram or cmd_opts.medvram)
 parallel_processing_allowed = not cmd_opts.lowvram and not cmd_opts.medvram
 
@@ -75,7 +81,6 @@ class State:
     current_image = None
     current_image_sampling_step = 0
 
-
     def interrupt(self):
         self.interrupted = True
 
@@ -89,17 +94,12 @@ state = State()
 
 artist_db = modules.artists.ArtistsDatabase(os.path.join(script_path, 'assets/webui/artists.csv'))
 
+styles_filename = os.path.join(script_path, 'assets/webui/styles.csv')
+prompt_styles = modules.styles.load_styles(styles_filename)
+
+interrogator = modules.interrogate.InterrogateModels("interrogate")
+
 face_restorers = []
-
-def find_any_font():
-    fonts = ['/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf']
-
-    for font in fonts:
-        if os.path.exists(font):
-            return font
-
-    return "Arial.TTF"
-
 
 class Options:
     class OptionInfo:
@@ -111,6 +111,7 @@ class Options:
 
     data = None
     data_labels = {
+        "samples_filename_format": OptionInfo("", "Samples filename format using following tags: [STEPS],[CFG],[PROMPT],[PROMPT_SPACES],[WIDTH],[HEIGHT],[SAMPLER],[SEED]. Leave blank for default."),
         "outdir_samples": OptionInfo("", "Output directory for images; if empty, defaults to two directories below"),
         "outdir_txt2img_samples": OptionInfo("outputs/txt2img-images", 'Output directory for txt2img images'),
         "outdir_img2img_samples": OptionInfo("outputs/img2img-images", 'Output directory for img2img images'),
@@ -118,11 +119,12 @@ class Options:
         "outdir_grids": OptionInfo("", "Output directory for grids; if empty, defaults to two directories below"),
         "outdir_txt2img_grids": OptionInfo("outputs/txt2img-grids", 'Output directory for txt2img grids'),
         "outdir_img2img_grids": OptionInfo("outputs/img2img-grids", 'Output directory for img2img grids'),
-        "save_to_dirs": OptionInfo(False, "When writing images/grids, create a directory with name derived from the prompt"),
+        "save_to_dirs": OptionInfo(False, "When writing images, create a directory with name derived from the prompt"),
+        "grid_save_to_dirs": OptionInfo(False, "When writing grids, create a directory with name derived from the prompt"),
         "save_to_dirs_prompt_len": OptionInfo(10, "When using above, how many words from prompt to put into directory name", gr.Slider, {"minimum": 1, "maximum": 32, "step": 1}),
         "outdir_save": OptionInfo("log/images", "Directory for saving images using the Save button"),
         "samples_save": OptionInfo(True, "Save indiviual samples"),
-        "samples_format": OptionInfo('png', 'File format for indiviual samples'),
+        "samples_format": OptionInfo('png', 'File format for individual samples'),
         "grid_save": OptionInfo(True, "Save image grids"),
         "return_grid": OptionInfo(True, "Show grid in results for web"),
         "grid_format": OptionInfo('png', 'File format for grids'),
@@ -132,7 +134,7 @@ class Options:
         "jpeg_quality": OptionInfo(80, "Quality for saved jpeg images", gr.Slider, {"minimum": 1, "maximum": 100, "step": 1}),
         "export_for_4chan": OptionInfo(True, "If PNG image is larger than 4MB or any dimension is larger than 4000, downscale and save copy as JPG"),
         "enable_pnginfo": OptionInfo(True, "Save text information about generation parameters as chunks to png files"),
-        "font": OptionInfo(find_any_font(), "Font for image grids  that have text"),
+        "font": OptionInfo("", "Font for image grids that have text"),
         "enable_emphasis": OptionInfo(True, "Use (text) to make model pay more attention to text text and [text] to make it pay less attention"),
         "save_txt": OptionInfo(False, "Create a text file next to every image with generation parameters."),
         "ESRGAN_tile": OptionInfo(192, "Tile size for upscaling. 0 = no tiling.", gr.Slider, {"minimum": 0, "maximum": 512, "step": 16}),
@@ -144,6 +146,11 @@ class Options:
         "multiple_tqdm": OptionInfo(True, "Add a second progress bar to the console that shows progress for an entire job. Broken in PyCharm console."),
         "face_restoration_model": OptionInfo(None, "Face restoration model", gr.Radio, lambda: {"choices": [x.name() for x in face_restorers]}),
         "code_former_weight": OptionInfo(0.5, "CodeFormer weight parameter; 0 = maximum effect; 1 = minimum effect", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.01}),
+        "interrogate_keep_models_in_memory": OptionInfo(True, "Interrogate: keep models in VRAM"),
+        "interrogate_use_builtin_artists": OptionInfo(True, "Interrogate: use artists from artists.csv"),
+        "interrogate_clip_num_beams": OptionInfo(1, "Interrogate: num_beams for BLIP", gr.Slider, {"minimum": 1, "maximum": 16, "step": 1}),
+        "interrogate_clip_min_length": OptionInfo(24, "Interrogate: minimum descripton length (excluding artists, etc..)", gr.Slider, {"minimum": 1, "maximum": 128, "step": 1}),
+        "interrogate_clip_max_length": OptionInfo(48, "Interrogate: maximum descripton length", gr.Slider, {"minimum": 1, "maximum": 256, "step": 1}),
     }
 
     def __init__(self):
