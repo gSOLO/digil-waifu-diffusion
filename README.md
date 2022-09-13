@@ -37,14 +37,14 @@ Has an implemetation of both the [AUTOMATIC1111 Web UI](https://github.com/AUTOM
 - Resizing aspect ratio options
 - Sampling method selection
 - Interrupt processing at any time
-- 4GB videocard support
+- 4GB video card support
 - Correct seeds for batches
 - Prompt length validation
 - Generation parameters added as text to PNG
 - Tab to view an existing picture's generation parameters
 - Settings page
 - Running custom code from UI
-- Mouseover hints fo most UI elements
+- Mouseover hints for most UI elements
 - Possible to change defaults/mix/max/step values for UI elements via text config
 - Random artist button
 - Tiling support: UI checkbox to create images that can be tiled like textures
