@@ -93,7 +93,7 @@ goto :show_stdout_stderr
 %PYTHON% -c "import k_diffusion.sampling" >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :install_GFPGAN
 echo Installing K-Diffusion...
-%PYTHON% -m pip install git+https://github.com/crowsonkb/k-diffusion.git --prefer-binary --only-binary=psutil >tmp/stdout.txt 2>tmp/stderr.txt
+%PYTHON% -m pip install git+https://github.com/crowsonkb/k-diffusion.git@1a0703dfb7d24d8806267c3e7ccc4caf67fd1331 --prefer-binary --only-binary=psutil >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :install_GFPGAN
 goto :show_stdout_stderr
 
@@ -102,7 +102,7 @@ goto :show_stdout_stderr
 %PYTHON% -c "import gfpgan" >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :install_reqs
 echo Installing GFPGAN
-%PYTHON% -m pip install git+https://github.com/TencentARC/GFPGAN.git --prefer-binary >tmp/stdout.txt 2>tmp/stderr.txt
+%PYTHON% -m pip install git+https://github.com/TencentARC/GFPGAN.git@8d2447a2d918f8eba5a4a01463fd48e45126a379 --prefer-binary >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :install_reqs
 goto :show_stdout_stderr
 

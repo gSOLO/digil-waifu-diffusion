@@ -63,7 +63,6 @@ def img2img(prompt: str, negative_prompt: str, prompt_style: str, init_img, init
         inpaint_full_res=inpaint_full_res,
         inpainting_mask_invert=inpainting_mask_invert,
         extra_generation_params={
-            "Denoising strength": denoising_strength,
             "Denoising strength change factor": (denoising_strength_change_factor if is_loopback else None)
         }
     )
@@ -119,7 +118,7 @@ def img2img(prompt: str, negative_prompt: str, prompt_style: str, init_img, init
 
         grid = images.image_grid(history, batch_size, rows=1)
 
-        images.save_image(grid, p.outpath_grids, "grid", initial_seed, prompt, opts.grid_format, info=info, short_filename=not opts.grid_extended_filename)
+        images.save_image(grid, p.outpath_grids, "grid", initial_seed, prompt, opts.grid_format, info=info, short_filename=not opts.grid_extended_filename, p=p)
 
         processed = Processed(p, history, initial_seed, initial_info)
 
@@ -180,7 +179,7 @@ def img2img(prompt: str, negative_prompt: str, prompt_style: str, init_img, init
             result_images.append(combined_image)
 
             if opts.samples_save:
-                images.save_image(combined_image, p.outpath_samples, "", start_seed, prompt, opts.samples_format, info=initial_info)
+                images.save_image(combined_image, p.outpath_samples, "", start_seed, prompt, opts.samples_format, info=initial_info, p=p)
 
         processed = Processed(p, result_images, seed, initial_info)
 

@@ -42,7 +42,7 @@ realesrgan.setup_realesrgan()
 
 
 def load_model_from_config(config, ckpt, verbose=False):
-    print(f"Loading model from {ckpt}")
+    print(f"Loading model [{shared.sd_model_hash}] from {ckpt}")
     pl_sd = torch.load(ckpt, map_location="cpu")
     if "global_step" in pl_sd:
         print(f"Global Step: {pl_sd['global_step']}")
@@ -56,7 +56,8 @@ def load_model_from_config(config, ckpt, verbose=False):
     if len(u) > 0 and verbose:
         print("unexpected keys:")
         print(u)
-
+    if cmd_opts.opt_channelslast:
+        model = model.to(memory_format=torch.channels_last)
     model.eval()
     return model
 
@@ -95,6 +96,14 @@ try:
 except Exception:
     pass
 
+with open(cmd_opts.ckpt, "rb") as file:
+    import hashlib
+    m = hashlib.sha256()
+
+    file.seek(0x100000)
+    m.update(file.read(0x10000))
+    shared.sd_model_hash = m.hexdigest()[0:8]
+
 sd_config = OmegaConf.load(cmd_opts.config)
 shared.sd_model = load_model_from_config(sd_config, cmd_opts.ckpt)
 shared.sd_model = (shared.sd_model if cmd_opts.no_half else shared.sd_model.half())
@@ -122,7 +131,13 @@ def webui():
         run_pnginfo=modules.extras.run_pnginfo
     )
 
-    demo.launch(share=cmd_opts.share, server_name="0.0.0.0" if cmd_opts.listen else None, server_port=cmd_opts.port)
+    demo.launch(
+        share=cmd_opts.share,
+        server_name="0.0.0.0" if cmd_opts.listen else None,
+        server_port=cmd_opts.port,
+        debug=cmd_opts.gradio_debug,
+        auth=[tuple(cred.split(':')) for cred in cmd_opts.gradio_auth.strip('"').split(',')] if cmd_opts.gradio_auth else None,
+    )
 
 
 if __name__ == "__main__":
