@@ -8,13 +8,13 @@
 #   else './GFPGAN'
 #   else os.path.join(script_path, "GFPGAN")
 #
-# Use artits db located at /assets/webui/artists.csv
-#   'artists.csv'
-#   'assets/webui/artists.csv'
-#
 # Save styles in /assets/webui/styles.csv
 #   'styles.csv'
 #   'assets/webui/styles.csv'
+#
+# Use artits db located at /assets/webui/artists.csv
+#   'artists.csv'
+#   'assets/webui/artists.csv'
 
 
 import sys
@@ -64,6 +64,7 @@ parser.add_argument("--ui-settings-file", type=str, help="filename to use for ui
 parser.add_argument("--gradio-debug",  action='store_true', help="launch gradio with --debug option")
 parser.add_argument("--gradio-auth", type=str, help='set gradio authentication like "username:password"; or comma-delimit multiple like "u1:p1,u2:p2,u3:p3"', default=None)
 parser.add_argument("--opt-channelslast", action='store_true', help="change memory type for stable diffusion to channels last")
+parser.add_argument("--styles-file", type=str, help="filename to use for styles", default=os.path.join(script_path, 'assets/webui/styles.csv'))
 
 cmd_opts = parser.parse_args()
 
@@ -96,9 +97,9 @@ class State:
 
 state = State()
 
-artist_db = modules.artists.ArtistsDatabase(os.path.join(script_path, 'assets/webui/artists.csv'))
+artist_db = modules.artists.ArtistsDatabase(os.path.join(script_path, 'artists.csv'))
 
-styles_filename = os.path.join(script_path, 'assets/webui/styles.csv')
+styles_filename = cmd_opts.styles_file
 prompt_styles = modules.styles.load_styles(styles_filename)
 
 interrogator = modules.interrogate.InterrogateModels("interrogate")
@@ -128,10 +129,11 @@ class Options:
         "outdir_txt2img_grids": OptionInfo("outputs/txt2img-grids", 'Output directory for txt2img grids', component_args=hide_dirs),
         "outdir_img2img_grids": OptionInfo("outputs/img2img-grids", 'Output directory for img2img grids', component_args=hide_dirs),
         "outdir_save": OptionInfo("log/images", "Directory for saving images using the Save button", component_args=hide_dirs),
-        "samples_save": OptionInfo(True, "Save indiviual samples"),
+        "samples_save": OptionInfo(True, "Always save all generated images"),
+        "save_selected_only": OptionInfo(False, "When using 'Save' button, only save a single selected image"),
         "samples_format": OptionInfo('png', 'File format for individual samples'),
         "filter_nsfw": OptionInfo(False, "Filter NSFW content"),
-        "grid_save": OptionInfo(True, "Save image grids"),
+        "grid_save": OptionInfo(True, "Always save all generated image grids"),
         "return_grid": OptionInfo(True, "Show grid in results for web"),
         "grid_format": OptionInfo('png', 'File format for grids'),
         "grid_extended_filename": OptionInfo(False, "Add extended info (seed, prompt) to filename when saving grid"),
@@ -141,6 +143,7 @@ class Options:
         "export_for_4chan": OptionInfo(True, "If PNG image is larger than 4MB or any dimension is larger than 4000, downscale and save copy as JPG"),
         "enable_pnginfo": OptionInfo(True, "Save text information about generation parameters as chunks to png files"),
         "add_model_hash_to_info": OptionInfo(False, "Add model hash to generation information"),
+        "img2img_color_correction": OptionInfo(False, "Apply color correction to img2img results to match original colors."),
         "font": OptionInfo("", "Font for image grids that have text"),
         "enable_emphasis": OptionInfo(True, "Use (text) to make model pay more attention to text text and [text] to make it pay less attention"),
         "save_txt": OptionInfo(False, "Create a text file next to every image with generation parameters."),

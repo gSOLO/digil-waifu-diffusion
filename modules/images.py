@@ -5,6 +5,8 @@ from collections import namedtuple
 import re
 
 import numpy as np
+import piexif
+import piexif.helper
 from PIL import Image, ImageFont, ImageDraw, PngImagePlugin
 from fonts.ttf import Roboto
 import string
@@ -278,10 +280,7 @@ def apply_filename_pattern(x, p, seed, prompt):
     return x
 
 
-def save_image(image, path, basename, seed=None, prompt=None, extension='png', info=None, short_filename=False, no_prompt=False, pnginfo_section_name='parameters', p=None, existing_info=None):
-    # would be better to add this as an argument in future, but will do for now
-    is_a_grid = basename != ""
-
+def save_image(image, path, basename, seed=None, prompt=None, extension='png', info=None, short_filename=False, no_prompt=False, grid=False, pnginfo_section_name='parameters', p=None, existing_info=None):
     if short_filename or prompt is None or seed is None:
         file_decoration = ""
     elif opts.save_to_dirs:
@@ -305,7 +304,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
     else:
         pnginfo = None
 
-    save_to_dirs = (is_a_grid and opts.grid_save_to_dirs) or (not is_a_grid and opts.save_to_dirs)
+    save_to_dirs = (grid and opts.grid_save_to_dirs) or (not grid and opts.save_to_dirs and not no_prompt)
 
     if save_to_dirs:
         dirname = apply_filename_pattern(opts.directories_filename_pattern or "[prompt_words]", p, seed, prompt)
@@ -323,7 +322,16 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
         if not os.path.exists(fullfn):
             break
 
-    image.save(fullfn, quality=opts.jpeg_quality, pnginfo=pnginfo)
+    if extension.lower() in ("jpg", "jpeg", "webp"):
+        exif_bytes = piexif.dump({
+            "Exif": {
+                piexif.ExifIFD.UserComment: info.encode("utf8"),
+            }
+        })
+    else:
+        exif_bytes = None
+
+    image.save(fullfn, quality=opts.jpeg_quality, pnginfo=pnginfo, exif=exif_bytes)
 
     target_side_length = 4000
     oversize = image.width > target_side_length or image.height > target_side_length
@@ -335,7 +343,7 @@ def save_image(image, path, basename, seed=None, prompt=None, extension='png', i
         elif oversize:
             image = image.resize((image.width * target_side_length // image.height, target_side_length), LANCZOS)
 
-        image.save(f"{fullfn_without_extension}.jpg", quality=opts.jpeg_quality, pnginfo=pnginfo)
+        image.save(fullfn, quality=opts.jpeg_quality, exif=exif_bytes)
 
     if opts.save_txt and info is not None:
         with open(f"{fullfn_without_extension}.txt", "w", encoding="utf8") as file:
