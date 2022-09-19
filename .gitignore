@@ -71,6 +71,7 @@ src/taming-transformers/
 /venv
 /tmp
 /model.ckpt
+/models/*.ckpt
 /GFPGANv1.3.pth
 /docs
 /log
