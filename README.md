@@ -5,7 +5,7 @@
 
 ## Waifu Diffusion
 
-Waifu Diffusion is the name for the project of finetuning Stable Diffusion on Danbooru images.
+Waifu Diffusion is the name for the project of finetuning Stable Diffusion on images and captions downloaded through Danbooru.
 
 Model Link: https://huggingface.co/hakurei/waifu-diffusion  
 
