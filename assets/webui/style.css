@@ -1,38 +1,106 @@
 .output-html p {margin: 0 0.5em;}
-.performance { font-size: 0.85em; color: #444; }
 
-#txt2img_generate, #img2img_generate{
-    max-width: 13em;
+.performance {
+    font-size: 0.85em;
+    color: #444;
+    display: flex;
+    justify-content: space-between;
+    white-space: nowrap;
 }
 
-#img2img_interrogate{
-    max-width: 10em;
+.performance .time {
+    margin-right: 0;
+}
+
+.performance .vram {
+    margin-left: 0;
+    text-align: right;
+}
+
+#generate{
+    min-height: 4.5em;
+}
+
+@media screen and (min-width: 2500px) {
+    #txt2img_gallery, #img2img_gallery {
+        min-height: 768px;
+    }
+}
+
+#txt2img_gallery img, #img2img_gallery img{
+    object-fit: scale-down;
+}
+
+.justify-center.overflow-x-scroll {
+    justify-content: left;
+}
+
+.justify-center.overflow-x-scroll button:first-of-type {
+    margin-left: auto;
+}
+
+.justify-center.overflow-x-scroll button:last-of-type {
+    margin-right: auto;
+}
+
+#random_seed, #random_subseed, #reuse_seed, #reuse_subseed{
+    min-width: auto;
+    flex-grow: 0;
+    padding-left: 0.25em;
+    padding-right: 0.25em;
+}
+
+#seed_row, #subseed_row{
+    gap: 0.5rem;
+}
+
+#subseed_show_box{
+    min-width: auto;
+    flex-grow: 0;
+}
+
+#subseed_show_box > div{
+    border: 0;
+    height: 100%;
 }
 
 #subseed_show{
-    min-width: 6em;
-    max-width: 6em;
+    min-width: auto;
+    flex-grow: 0;
+    padding: 0;
 }
 
 #subseed_show label{
     height: 100%;
 }
 
-#txt2img_roll{
+#roll{
     min-width: 1em;
     max-width: 4em;
+    margin: 0.5em;
 }
 
-#style_index{
-    min-width: 9em;
-    max-width: 9em;
-    padding-left: 0;
-    padding-right: 0;
+#style_apply, #style_create, #interrogate{
+    margin: 0.75em 0.25em 0.25em 0.25em;
+    min-width: 3em;
+}
+
+#style_pos_col, #style_neg_col{
+    min-width: 4em !important;
+}
+
+#style_index, #style2_index{
+    margin-top: 1em;
+}
+
+.gr-form{
+    background: transparent;
 }
 
 #toprow div{
     border: none;
     gap: 0;
+    background: transparent;
 }
 
 #resize_mode{
@@ -43,10 +111,10 @@ button{
     align-self: stretch !important;
 }
 
-#img2img_prompt, #txt2img_prompt, #img2img_negative_prompt, #txt2img_negative_prompt{
+#prompt, #negative_prompt{
     border: none !important;
 }
-#img2img_prompt textarea, #txt2img_prompt textarea, #img2img_negative_prompt textarea, #txt2img_negative_prompt textarea{
+#prompt textarea, #negative_prompt textarea{
     border: none !important;
 }
 
@@ -115,6 +183,7 @@ fieldset span.text-gray-500, .gr-block.gr-box span.text-gray-500,  label.block s
 
 #settings .gr-panel div.flex-col div.justify-between div{
     position: relative;
+    z-index: 200;
 }
 
 input[type="range"]{
@@ -133,8 +202,12 @@ input[type="range"]{
 }
 
 #txt2img_negative_prompt, #img2img_negative_prompt{
-    flex: 0.3;
-    min-width: 10em;
+}
+
+#progressbar{
+  position: absolute;
+  z-index: 1000;
+  right: 0;
 }
 
 .progressDiv{
@@ -160,3 +233,80 @@ input[type="range"]{
   border-radius: 8px;
 }
 
+#lightboxModal{
+  display: none;
+  position: fixed;
+  z-index: 1001;
+  padding-top: 100px;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(20, 20, 20, 0.95);
+}
+
+.modalClose, 
+.modalZoom {
+  color: white;
+  position: absolute;
+  top: 10px;
+  right: 25px;
+  font-size: 35px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.modalZoom {
+  left: 10px;
+  right: auto;
+}
+
+.modalClose:hover,
+.modalClose:focus,
+.modalZoom:hover,
+.modalZoom:focus {
+  color: #999;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#modalImage {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: auto;
+    width: auto;
+}
+
+.modalImageFullscreen {
+    object-fit: contain;
+    height: 90%;
+}
+
+.modalPrev,
+.modalNext {
+  cursor: pointer;
+  position: absolute;
+  top: 50%;
+  width: auto;
+  padding: 16px;
+  margin-top: -50px;
+  color: white;
+  font-weight: bold;
+  font-size: 20px;
+  transition: 0.6s ease;
+  border-radius: 0 3px 3px 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.modalNext {
+  right: 0;
+  border-radius: 3px 0 0 3px;
+}
+
+.modalPrev:hover,
+.modalNext:hover {
+  background-color: rgba(0, 0, 0, 0.8);
+}

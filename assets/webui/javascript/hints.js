@@ -1,4 +1,4 @@
-
+// mouseover tooltips for various UI elements
 
 titles = {
     "Sampling steps": "How many times to improve the generated image iteratively; higher values take longer; very low values can produce bad results",
@@ -11,9 +11,10 @@ titles = {
 	"Batch size": "How many image to create in a single batch",
     "CFG Scale": "Classifier Free Guidance Scale - how strongly the image should conform to prompt - lower values produce more creative results",
     "Seed": "A value that determines the output of random number generator - if you create an image with same parameters and seed as another image, you'll get the same result",
+    "\u{1f3b2}\ufe0f": "Set seed to -1, which will cause a new random number to be used every time",
+    "\u267b\ufe0f": "Reuse seed from last generation, mostly useful if it was randomed",
 
     "Inpaint a part of image": "Draw a mask over an image, and the script will regenerate the masked area with content according to prompt",
-    "Loopback": "Process an image, use it as an input, repeat. Batch count determins number of iterations.",
     "SD upscale": "Upscale image normally, split result into tiles, improve each tile using img2img, merge whole image back",
 
     "Just resize": "Resize image to target resolution. Unless height and width match, you will get incorrect aspect ratio.",
@@ -58,20 +59,41 @@ titles = {
 
     "Images filename pattern": "Use following tags to define how filenames for images are chosen: [steps], [cfg], [prompt], [prompt_spaces], [width], [height], [sampler], [seed], [model_hash], [prompt_words], [date]; leave empty for default.",
     "Directory name pattern": "Use following tags to define how subdirectories for images and grids are chosen: [steps], [cfg], [prompt], [prompt_spaces], [width], [height], [sampler], [seed], [model_hash], [prompt_words], [date]; leave empty for default.",
+
+    "Loopback": "Process an image, use it as an input, repeat.",
+    "Loops": "How many times to repeat processing an image and using it as input for the next iteration",
+
+
+    "Style 1": "Style to apply; styles have components for both positive and negative prompts and apply to both",
+    "Style 2": "Style to apply; styles have components for both positive and negative prompts and apply to both",
+    "Apply style": "Insert selected styles into prompt fields",
+    "Create style": "Save current prompts as a style. If you add the token {prompt} to the text, the style use that as placeholder for your prompt when you use the style in the future.",
+
+    "Checkpoint name": "Loads weights from checkpoint before making images. You can either use hash or a part of filename (as seen in settings) for checkpoint name. Recommended to use with Y axis for less switching.",
+
+    "vram": "Torch active: Peak amount of VRAM used by Torch during generation, excluding cached data.\nTorch reserved: Peak amount of VRAM allocated by Torch, including all active and cached data.\nSys VRAM: Peak amount of VRAM allocation across all applications / total GPU VRAM (peak utilization%).",
+
+    "Highres. fix": "Use a two step process to partially create an image at smaller resolution, upscale, and then improve details in it without changing composition",
+    "Scale latent": "Uscale the image in latent space. Alternative is to produce the full image from latent representation, upscale that, and then move it back to latent space.",
+
 }
 
-function gradioApp(){
-    return document.getElementsByTagName('gradio-app')[0].shadowRoot;
-}
 
-global_progressbar = null
-
-function addTitles(root){
-	root.querySelectorAll('span, button, select').forEach(function(span){
+onUiUpdate(function(){
+	gradioApp().querySelectorAll('span, button, select, p').forEach(function(span){
 		tooltip = titles[span.textContent];
 
 		if(!tooltip){
 		    tooltip = titles[span.value];
+		}
+
+		if(!tooltip){
+			for (const c of span.classList) {
+				if (c in titles) {
+					tooltip = titles[c];
+					break;
+				}
+			}
 		}
 
 		if(tooltip){
@@ -79,119 +101,11 @@ function addTitles(root){
 		}
 	})
 
-	root.querySelectorAll('select').forEach(function(select){
+	gradioApp().querySelectorAll('select').forEach(function(select){
 	    if (select.onchange != null) return;
 
 	    select.onchange = function(){
             select.title = titles[select.value] || "";
 	    }
 	})
-
-	progressbar = root.getElementById('progressbar')
-	if(progressbar!= null && progressbar != global_progressbar){
-	    global_progressbar = progressbar
-
-        var mutationObserver = new MutationObserver(function(m){
-            txt2img_preview = gradioApp().getElementById('txt2img_preview')
-            txt2img_gallery = gradioApp().getElementById('txt2img_gallery')
-
-            img2img_preview = gradioApp().getElementById('img2img_preview')
-            img2img_gallery = gradioApp().getElementById('img2img_gallery')
-
-            if(txt2img_preview != null && txt2img_gallery != null){
-                txt2img_preview.style.width = txt2img_gallery.clientWidth + "px"
-                txt2img_preview.style.height = txt2img_gallery.clientHeight + "px"
-            }
-
-            if(img2img_preview != null && img2img_gallery != null){
-                img2img_preview.style.width = img2img_gallery.clientWidth + "px"
-                img2img_preview.style.height = img2img_gallery.clientHeight + "px"
-            }
-
-
-            window.setTimeout(requestProgress, 500)
-        });
-        mutationObserver.observe( progressbar, { childList:true, subtree:true })
-	}
-
-}
-
-document.addEventListener("DOMContentLoaded", function() {
-    var mutationObserver = new MutationObserver(function(m){
-        addTitles(gradioApp());
-    });
-    mutationObserver.observe( gradioApp(), { childList:true, subtree:true })
-});
-
-function selected_gallery_index(){
-    var gr = gradioApp()
-    var buttons = gradioApp().querySelectorAll(".gallery-item")
-    var button = gr.querySelector(".gallery-item.\\!ring-2")
-
-    var result = -1
-    buttons.forEach(function(v, i){ if(v==button) { result = i } })
-
-    return result
-}
-
-function extract_image_from_gallery(gallery){
-    if(gallery.length == 1){
-        return gallery[0]
-    }
-
-    index = selected_gallery_index()
-
-    if (index < 0 || index >= gallery.length){
-        return [null]
-    }
-
-    return gallery[index];
-}
-
-function extract_image_from_gallery_img2img(gallery){
-    gradioApp().querySelectorAll('button')[1].click();
-    return extract_image_from_gallery(gallery);
-}
-
-function extract_image_from_gallery_extras(gallery){
-    gradioApp().querySelectorAll('button')[2].click();
-    return extract_image_from_gallery(gallery);
-}
-
-function requestProgress(){
-    btn = gradioApp().getElementById("check_progress");
-    if(btn==null) return;
-
-    btn.click();
-}
-
-function submit(){
-    window.setTimeout(requestProgress, 500)
-
-    res = []
-    for(var i=0;i<arguments.length;i++){
-        res.push(arguments[i])
-    }
-    return res
-}
-
-window.addEventListener('paste', e => {
-    const files = e.clipboardData.files;
-    if (!files || files.length !== 1) {
-        return;
-    }
-    if (!['image/png', 'image/gif', 'image/jpeg'].includes(files[0].type)) {
-        return;
-    }
-    [...gradioApp().querySelectorAll('input[type=file][accept="image/x-png,image/gif,image/jpeg"]')]
-        .filter(input => !input.matches('.\\!hidden input[type=file]'))
-        .forEach(input => {
-            input.files = files;
-            input.dispatchEvent(new Event('change'))
-        });
-});
-
-function ask_for_style_name(_, prompt_text, negative_prompt_text) {
-    name_ = prompt('Style name:')
-    return name_ === null ? [null, null, null]: [name_, prompt_text, negative_prompt_text]
-}
+})
