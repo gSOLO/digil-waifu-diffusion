@@ -61,11 +61,13 @@ ESRGAN/
 GFPGAN/
 LDSR/
 RealESRGAN/
+SwinIR/
 
 # WebUI
 /ui-config.json
 assets/webui/styles.csv
 assets/webui/styles.csv.bak
+assets/webui/user.css
 src/clip/
 src/taming-transformers/
 /repositories
@@ -77,6 +79,7 @@ src/taming-transformers/
 /docs
 /log
 /interrogate
+/.idea
 
 # App Icon and Start Menu Shortcut
 \!outputs.lnk
