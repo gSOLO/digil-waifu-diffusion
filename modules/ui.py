@@ -16,6 +16,7 @@
 #   "javascript"
 #   "assets/webui/javascript"
 
+
 import base64
 import html
 import io
@@ -41,6 +42,7 @@ from modules.shared import opts, cmd_opts
 import modules.shared as shared
 from modules.sd_samplers import samplers, samplers_for_img2img
 import modules.realesrgan_model as realesrgan
+import modules.ldsr_model
 import modules.scripts
 import modules.gfpgan_model
 import modules.codeformer_model
@@ -275,7 +277,7 @@ def create_seed_inputs():
     with gr.Row():
         with gr.Box():
             with gr.Row(elem_id='seed_row'):
-                seed = gr.Number(label='Seed', value=-1)
+                seed = (gr.Textbox if cmd_opts.use_textbox_seed else gr.Number)(label='Seed', value=-1)
                 seed.style(container=False)
                 random_seed = gr.Button(random_symbol, elem_id='random_seed')
                 reuse_seed = gr.Button(reuse_symbol, elem_id='reuse_seed')
@@ -309,7 +311,7 @@ def create_seed_inputs():
 
     seed_checkbox.change(change_visibility, show_progress=False, inputs=[seed_checkbox], outputs=seed_extras)
 
-    return seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w
+    return seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_checkbox
 
 
 def connect_reuse_seed(seed: gr.Number, reuse_seed: gr.Button, generation_info: gr.Textbox, dummy_component, is_subseed):
@@ -414,7 +416,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     enable_hr = gr.Checkbox(label='Highres. fix', value=False)
 
                 with gr.Row(visible=False) as hr_options:
-                    scale_latent = gr.Checkbox(label='Scale latent', value=True)
+                    scale_latent = gr.Checkbox(label='Scale latent', value=False)
                     denoising_strength = gr.Slider(minimum=0.0, maximum=1.0, step=0.01, label='Denoising strength', value=0.7)
 
                 with gr.Row():
@@ -427,7 +429,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     width = gr.Slider(minimum=64, maximum=2048, step=64, label="Width", value=512)
                     height = gr.Slider(minimum=64, maximum=2048, step=64, label="Height", value=512)
 
-                seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w = create_seed_inputs()
+                seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_checkbox = create_seed_inputs()
 
                 with gr.Group():
                     custom_inputs = modules.scripts.scripts_txt2img.setup_ui(is_img2img=False)
@@ -472,7 +474,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     batch_size,
                     cfg_scale,
                     seed,
-                    subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w,
+                    subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_checkbox,
                     height,
                     width,
                     enable_hr,
@@ -572,7 +574,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     width = gr.Slider(minimum=64, maximum=2048, step=64, label="Width", value=512)
                     height = gr.Slider(minimum=64, maximum=2048, step=64, label="Height", value=512)
 
-                seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w = create_seed_inputs()
+                seed, reuse_seed, subseed, reuse_subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_checkbox = create_seed_inputs()
 
                 with gr.Group():
                     custom_inputs = modules.scripts.scripts_img2img.setup_ui(is_img2img=True)
@@ -680,7 +682,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
                     cfg_scale,
                     denoising_strength,
                     seed,
-                    subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w,
+                    subseed, subseed_strength, seed_resize_from_h, seed_resize_from_w, seed_checkbox,
                     height,
                     width,
                     resize_mode,
@@ -815,7 +817,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
     pnginfo_interface = gr.Interface(
         wrap_gradio_call(run_pnginfo),
         inputs=[
-            gr.Image(label="Source", source="upload", interactive=True, type="pil"),
+            gr.Image(elem_id="pnginfo_image", label="Source", source="upload", interactive=True, type="pil"),
         ],
         outputs=[
             gr.HTML(),
@@ -824,6 +826,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
         ],
         allow_flagging="never",
         analytics_enabled=False,
+        live=True,
     )
 
     def create_setting_component(key):
@@ -892,6 +895,14 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
             outputs=[result]
         )
 
+        request_notifications = gr.Button(value='Request browser notifications')
+        request_notifications.click(
+            fn=lambda: None,
+            inputs=[],
+            outputs=[],
+            _js='() => Notification.requestPermission()'
+        )
+
     interfaces = [
         (txt2img_interface, "txt2img", "txt2img"),
         (img2img_interface, "img2img", "img2img"),
@@ -900,7 +911,7 @@ def create_ui(txt2img, img2img, run_extras, run_pnginfo):
         (settings_interface, "Settings", "settings"),
     ]
 
-    with open(os.path.join(script_path, "assets/webui/style.css"), "r", encoding="utf8") as file:
+    with open(os.path.join(script_path,"assets/webui/style.css"), "r", encoding="utf8") as file:
         css = file.read()
 
     if os.path.exists(os.path.join(script_path, "assets/webui/user.css")):
