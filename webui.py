@@ -1,10 +1,3 @@
-# Digil Diffusion
-#
-# Load scripts from /scripts/webui
-#   "scripts"
-#   "scripts/webui"
-
-
 import os
 import threading
 
@@ -60,6 +53,7 @@ def wrap_gradio_gpu_call(func):
         shared.state.current_latent = None
         shared.state.current_image = None
         shared.state.current_image_sampling_step = 0
+        shared.state.interrupted = False
 
         with queue_lock:
             res = func(*args, **kwargs)
