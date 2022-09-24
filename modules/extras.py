@@ -15,30 +15,22 @@ import piexif.helper
 cached_images = {}
 
 
-def run_extras(image, image_folder, gfpgan_visibility, codeformer_visibility, codeformer_weight, upscaling_resize, extras_upscaler_1, extras_upscaler_2, extras_upscaler_2_visibility):
+def run_extras(extras_mode, image, image_folder, gfpgan_visibility, codeformer_visibility, codeformer_weight, upscaling_resize, extras_upscaler_1, extras_upscaler_2, extras_upscaler_2_visibility):
     devices.torch_gc()
 
     imageArr = []
     # Also keep track of original file names
     imageNameArr = []
 
-    if image_folder is not None:
-        if image is not None:
-            print("Batch detected and single image detected, please only use one of the two. Aborting.")
-            return None
+    if extras_mode == 1:
         #convert file to pillow image
         for img in image_folder:
             image = Image.fromarray(np.array(Image.open(img)))
             imageArr.append(image)
             imageNameArr.append(os.path.splitext(img.orig_name)[0])
-
-    elif image is not None:
-        if image_folder is not None:
-            print("Batch detected and single image detected, please only use one of the two. Aborting.")
-            return None
-        else:
-            imageArr.append(image)
-            imageNameArr.append(None)
+    else:
+        imageArr.append(image)
+        imageNameArr.append(None)
 
     outpath = opts.outdir_samples or opts.outdir_extras_samples
 
@@ -110,6 +102,7 @@ def run_pnginfo(image):
         return '', '', ''
 
     items = image.info
+    geninfo = ''
 
     if "exif" in image.info:
         exif = piexif.load(image.info["exif"])
@@ -119,13 +112,14 @@ def run_pnginfo(image):
         except ValueError:
             exif_comment = exif_comment.decode('utf8', errors="ignore")
 
-
         items['exif comment'] = exif_comment
+        geninfo = exif_comment
 
         for field in ['jfif', 'jfif_version', 'jfif_unit', 'jfif_density', 'dpi', 'exif',
                       'loop', 'background', 'timestamp', 'duration']:
             items.pop(field, None)
 
+    geninfo = items.get('parameters', geninfo)
 
     info = ''
     for key, text in items.items():
@@ -140,4 +134,4 @@ def run_pnginfo(image):
         message = "Nothing found in the image."
         info = f"<div><p>{message}<p></div>"
 
-    return '', '', info
+    return '', geninfo, info

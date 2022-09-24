@@ -20,6 +20,7 @@ import modules.shared as shared
 import modules.face_restoration
 import modules.images as images
 import modules.styles
+import logging
 
 
 # some of those options should not be changed at all because they would break the model, so I removed them from options.
@@ -28,11 +29,13 @@ opt_f = 8
 
 
 def setup_color_correction(image):
+    logging.info("Calibrating color correction.")
     correction_target = cv2.cvtColor(np.asarray(image.copy()), cv2.COLOR_RGB2LAB)
     return correction_target
 
 
 def apply_color_correction(correction, image):
+    logging.info("Applying color correction.")
     image = Image.fromarray(cv2.cvtColor(exposure.match_histograms(
         cv2.cvtColor(
             np.asarray(image),
@@ -357,7 +360,7 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
 
                 if p.restore_faces:
                     if opts.save and not p.do_not_save_samples and opts.save_images_before_face_restoration:
-                        images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", seeds[i], prompts[i], opts.samples_format, info=infotext(n, i), p=p)
+                        images.save_image(Image.fromarray(x_sample), p.outpath_samples, "", seeds[i], prompts[i], opts.samples_format, info=infotext(n, i), p=p, suffix="-before-face-restoration")
 
                     devices.torch_gc()
 
@@ -366,6 +369,8 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
                 image = Image.fromarray(x_sample)
 
                 if p.color_corrections is not None and i < len(p.color_corrections):
+                    if opts.save and not p.do_not_save_samples and opts.save_images_before_color_correction:
+                        images.save_image(image, p.outpath_samples, "", seeds[i], prompts[i], opts.samples_format, info=infotext(n, i), p=p, suffix="-before-color-correction")
                     image = apply_color_correction(p.color_corrections[i], image)
 
                 if p.overlay_images is not None and i < len(p.overlay_images):
@@ -457,7 +462,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         else:
             decoded_samples = self.sd_model.decode_first_stage(samples)
 
-            if opts.upscaler_for_hires_fix is None or opts.upscaler_for_hires_fix == "None":
+            if opts.upscaler_for_img2img is None or opts.upscaler_for_img2img == "None":
                 decoded_samples = torch.nn.functional.interpolate(decoded_samples, size=(self.height, self.width), mode="bilinear")
             else:
                 lowres_samples = torch.clamp((decoded_samples + 1.0) / 2.0, min=0.0, max=1.0)
@@ -467,7 +472,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                     x_sample = 255. * np.moveaxis(x_sample.cpu().numpy(), 0, 2)
                     x_sample = x_sample.astype(np.uint8)
                     image = Image.fromarray(x_sample)
-                    upscaler = [x for x in shared.sd_upscalers if x.name == opts.upscaler_for_hires_fix][0]
+                    upscaler = [x for x in shared.sd_upscalers if x.name == opts.upscaler_for_img2img][0]
                     image = upscaler.upscale(image, self.width, self.height)
                     image = np.array(image).astype(np.float32) / 255.0
                     image = np.moveaxis(image, 2, 0)
@@ -483,6 +488,11 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         self.sampler = samplers[self.sampler_index].constructor(self.sd_model)
         noise = create_random_tensors(samples.shape[1:], seeds=seeds, subseeds=subseeds, subseed_strength=subseed_strength, seed_resize_from_h=self.seed_resize_from_h, seed_resize_from_w=self.seed_resize_from_w, p=self)
+
+        # GC now before running the next img2img to prevent running out of memory
+        x = None
+        devices.torch_gc()
+        
         samples = self.sampler.sample_img2img(self, samples, noise, conditioning, unconditional_conditioning, steps=self.steps)
 
         return samples
@@ -491,7 +501,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
     sampler = None
 
-    def __init__(self, init_images=None, resize_mode=0, denoising_strength=0.75, mask=None, mask_blur=4, inpainting_fill=0, inpaint_full_res=True, inpainting_mask_invert=0, **kwargs):
+    def __init__(self, init_images=None, resize_mode=0, denoising_strength=0.75, mask=None, mask_blur=4, inpainting_fill=0, inpaint_full_res=True, inpaint_full_res_padding=0, inpainting_mask_invert=0, **kwargs):
         super().__init__(**kwargs)
 
         self.init_images = init_images
@@ -505,6 +515,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
         self.mask_blur = mask_blur
         self.inpainting_fill = inpainting_fill
         self.inpaint_full_res = inpaint_full_res
+        self.inpaint_full_res_padding = inpaint_full_res_padding
         self.inpainting_mask_invert = inpainting_mask_invert
         self.mask = None
         self.nmask = None
@@ -527,7 +538,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
             if self.inpaint_full_res:
                 self.mask_for_overlay = self.image_mask
                 mask = self.image_mask.convert('L')
-                crop_region = masking.get_crop_region(np.array(mask), opts.upscale_at_full_resolution_padding)
+                crop_region = masking.get_crop_region(np.array(mask), self.inpaint_full_res_padding)
                 crop_region = masking.expand_crop_region(crop_region, self.width, self.height, mask.width, mask.height)
                 x1, y1, x2, y2 = crop_region
 
