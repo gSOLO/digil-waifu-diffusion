@@ -10,6 +10,8 @@ set COMMANDLINE_ARGS=--autolaunch
 if not defined PYTHON (set PYTHON=python)
 if not defined VENV_DIR (set VENV_DIR=venv)
 
+set ERROR_REPORTING=FALSE
+
 mkdir tmp 2>NUL
 
 %PYTHON% -c "" >tmp/stdout.txt 2>tmp/stderr.txt
@@ -65,3 +67,4 @@ type tmp\stderr.txt
 echo.
 echo Launch unsuccessful. Exiting.
 pause
+

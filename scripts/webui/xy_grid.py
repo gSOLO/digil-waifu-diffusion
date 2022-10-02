@@ -2,6 +2,7 @@ from collections import namedtuple
 from copy import copy
 import random
 
+from PIL import Image
 import numpy as np
 
 import modules.scripts as scripts
@@ -44,11 +45,8 @@ def apply_sampler(p, x, xs):
 
 
 def apply_checkpoint(p, x, xs):
-    applicable = [info for info in modules.sd_models.checkpoints_list.values() if x in info.title]
-    assert len(applicable) > 0, f'Checkpoint {x} for found'
-
-    info = applicable[0]
-
+    info = modules.sd_models.get_closet_checkpoint_match(x)
+    assert info is not None, f'Checkpoint for {x} not found'
     modules.sd_models.reload_model_weights(shared.sd_model, info)
 
 
@@ -86,7 +84,12 @@ axis_options = [
     AxisOption("Prompt S/R", str, apply_prompt, format_value),
     AxisOption("Sampler", str, apply_sampler, format_value),
     AxisOption("Checkpoint name", str, apply_checkpoint, format_value),
-    AxisOptionImg2Img("Denoising", float, apply_field("denoising_strength"), format_value_add_label), #  as it is now all AxisOptionImg2Img items must go after AxisOption ones
+    AxisOption("Sigma Churn", float, apply_field("s_churn"), format_value_add_label),
+    AxisOption("Sigma min", float, apply_field("s_tmin"), format_value_add_label),
+    AxisOption("Sigma max", float, apply_field("s_tmax"), format_value_add_label),
+    AxisOption("Sigma noise", float, apply_field("s_noise"), format_value_add_label),
+    AxisOption("Eta", float, apply_field("eta"), format_value_add_label),
+    AxisOptionImg2Img("Denoising", float, apply_field("denoising_strength"), format_value_add_label),  # as it is now all AxisOptionImg2Img items must go after AxisOption ones
 ]
 
 
@@ -108,7 +111,10 @@ def draw_xy_grid(p, xs, ys, x_labels, y_labels, cell, draw_legend):
             if first_pocessed is None:
                 first_pocessed = processed
 
-            res.append(processed.images[0])
+            try:
+              res.append(processed.images[0])
+            except:
+              res.append(Image.new(res[0].mode, res[0].size))
 
     grid = images.image_grid(res, rows=len(ys))
     if draw_legend:
@@ -150,6 +156,9 @@ class Script(scripts.Script):
         p.batch_size = 1
 
         def process_axis(opt, vals):
+            if opt.label == 'Nothing':
+                return [0]
+
             valslist = [x.strip() for x in vals.split(",")]
 
             if opt.type == int:
