@@ -84,6 +84,7 @@ src/taming-transformers/
 /log
 /interrogate
 /.idea
+config.json
 
 # App Icon and Start Menu Shortcut
 \!outputs.lnk

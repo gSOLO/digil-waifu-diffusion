@@ -1,9 +1,5 @@
 # Digil Diffusion
 #
-# Use model localed at /models/ldm/stable-diffusion-v1/model.ckpt
-#   sd_model_file = os.path.join(script_path, 'model.ckpt')
-#   sd_model_file = os.path.join(script_path, "models/ldm/stable-diffusion-v1/model.ckpt")
-#
 # Save styles in /assets/webui/styles.csv
 #   'styles.csv'
 #   'assets/webui/styles.csv'
@@ -30,7 +26,7 @@ import modules.styles
 from modules.devices import get_optimal_device
 from modules.paths import script_path, sd_path
 
-sd_model_file = os.path.join(script_path, "models/ldm/stable-diffusion-v1/model.ckpt")
+sd_model_file = os.path.join(script_path, 'model.ckpt')
 default_sd_model_file = sd_model_file
 model_path = os.path.join(script_path, 'models')
 parser = argparse.ArgumentParser()
