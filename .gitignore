@@ -76,6 +76,7 @@ src/taming-transformers/
 /tmp
 /model.ckpt
 /models/*.ckpt
+/models/**/*
 /GFPGANv1.3.pth
 /GFPGANv1.4.pth
 /gfpgan/weights/*.pth
