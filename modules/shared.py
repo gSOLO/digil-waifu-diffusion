@@ -4,14 +4,6 @@
 #   sd_model_file = os.path.join(script_path, 'model.ckpt')
 #   sd_model_file = os.path.join(script_path, "models/ldm/stable-diffusion-v1/model.ckpt")
 #
-# Set default GFPGAN directory to /GFPGAN
-#   else './GFPGAN'
-#   else os.path.join(script_path, "GFPGAN")
-#
-# Use GFPGANv1.4.pth
-#   parser.add_argument("--gfpgan-model", type=str, help="GFPGAN model file name", default=None)
-#   parser.add_argument("--gfpgan-model", type=str, help="GFPGAN model file name", default='GFPGANv1.4.pth')
-#
 # Save styles in /assets/webui/styles.csv
 #   'styles.csv'
 #   'assets/webui/styles.csv'
@@ -21,30 +13,32 @@
 #   'assets/webui/artists.csv'
 
 
-import sys
 import argparse
+import datetime
 import json
 import os
+import sys
+
 import gradio as gr
 import tqdm
 
 import modules.artists
-from modules.paths import script_path, sd_path
-from modules.devices import get_optimal_device
-import modules.styles
 import modules.interrogate
 import modules.memmon
 import modules.sd_models
+import modules.styles
+from modules.devices import get_optimal_device
+from modules.paths import script_path, sd_path
 
 sd_model_file = os.path.join(script_path, "models/ldm/stable-diffusion-v1/model.ckpt")
 default_sd_model_file = sd_model_file
-
+model_path = os.path.join(script_path, 'models')
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, default=os.path.join(sd_path, "configs/stable-diffusion/v1-inference.yaml"), help="path to config which constructs model",)
-parser.add_argument("--ckpt", type=str, default=sd_model_file, help="path to checkpoint of stable diffusion model; this checkpoint will be added to the list of checkpoints and loaded by default if you don't have a checkpoint selected in settings",)
-parser.add_argument("--ckpt-dir", type=str, default=os.path.join(script_path, 'models'), help="path to directory with stable diffusion checkpoints",)
-parser.add_argument("--gfpgan-dir", type=str, help="GFPGAN directory", default=('./src/gfpgan' if os.path.exists('./src/gfpgan') else os.path.join(script_path, "GFPGAN")))
-parser.add_argument("--gfpgan-model", type=str, help="GFPGAN model file name", default='GFPGANv1.4.pth')
+parser.add_argument("--ckpt", type=str, default=sd_model_file, help="path to checkpoint of stable diffusion model; if specified, this checkpoint will be added to the list of checkpoints and loaded",)
+parser.add_argument("--ckpt-dir", type=str, default=None, help="Path to directory with stable diffusion checkpoints")
+parser.add_argument("--gfpgan-dir", type=str, help="GFPGAN directory", default=('./src/gfpgan' if os.path.exists('./src/gfpgan') else './GFPGAN'))
+parser.add_argument("--gfpgan-model", type=str, help="GFPGAN model file name", default=None)
 parser.add_argument("--no-half", action='store_true', help="do not switch the model to 16-bit floats")
 parser.add_argument("--no-progressbar-hiding", action='store_true', help="do not hide progressbar in gradio UI (we hide it because it slows down ML if you have hardware acceleration in browser)")
 parser.add_argument("--max-batch-count", type=int, default=16, help="maximum batch count value for the UI")
@@ -56,8 +50,13 @@ parser.add_argument("--always-batch-cond-uncond", action='store_true', help="dis
 parser.add_argument("--unload-gfpgan", action='store_true', help="does not do anything.")
 parser.add_argument("--precision", type=str, help="evaluate at this precision", choices=["full", "autocast"], default="autocast")
 parser.add_argument("--share", action='store_true', help="use share=True for gradio and make the UI accessible through their site (doesn't work for me but you might have better luck)")
-parser.add_argument("--esrgan-models-path", type=str, help="path to directory with ESRGAN models", default=os.path.join(script_path, 'ESRGAN'))
-parser.add_argument("--swinir-models-path", type=str, help="path to directory with SwinIR models", default=os.path.join(script_path, 'SwinIR'))
+parser.add_argument("--codeformer-models-path", type=str, help="Path to directory with codeformer model file(s).", default=os.path.join(model_path, 'Codeformer'))
+parser.add_argument("--gfpgan-models-path", type=str, help="Path to directory with GFPGAN model file(s).", default=os.path.join(model_path, 'GFPGAN'))
+parser.add_argument("--esrgan-models-path", type=str, help="Path to directory with ESRGAN model file(s).", default=os.path.join(model_path, 'ESRGAN'))
+parser.add_argument("--bsrgan-models-path", type=str, help="Path to directory with BSRGAN model file(s).", default=os.path.join(model_path, 'BSRGAN'))
+parser.add_argument("--realesrgan-models-path", type=str, help="Path to directory with RealESRGAN model file(s).", default=os.path.join(model_path, 'RealESRGAN'))
+parser.add_argument("--swinir-models-path", type=str, help="Path to directory with SwinIR model file(s).", default=os.path.join(model_path, 'SwinIR'))
+parser.add_argument("--ldsr-models-path", type=str, help="Path to directory with LDSR model file(s).", default=os.path.join(model_path, 'LDSR'))
 parser.add_argument("--opt-split-attention", action='store_true', help="force-enables cross-attention layer optimization. By default, it's on for torch.cuda and off for other torch devices.")
 parser.add_argument("--disable-opt-split-attention", action='store_true', help="force-disables cross-attention layer optimization")
 parser.add_argument("--opt-split-attention-v1", action='store_true', help="enable older version of split attention optimization that does not consume all the VRAM it can find")
@@ -76,7 +75,6 @@ parser.add_argument("--autolaunch", action='store_true', help="open the webui UR
 parser.add_argument("--use-textbox-seed", action='store_true', help="use textbox for seeds in UI (no up/down, but possible to input long seeds)", default=False)
 
 cmd_opts = parser.parse_args()
-
 device = get_optimal_device()
 
 batch_cond_uncond = cmd_opts.always_batch_cond_uncond or not (cmd_opts.lowvram or cmd_opts.medvram)
@@ -84,11 +82,13 @@ parallel_processing_allowed = not cmd_opts.lowvram and not cmd_opts.medvram
 
 config_filename = cmd_opts.ui_settings_file
 
+
 class State:
     interrupted = False
     job = ""
     job_no = 0
     job_count = 0
+    job_timestamp = '0'
     sampling_step = 0
     sampling_steps = 0
     current_latent = None
@@ -102,11 +102,15 @@ class State:
         self.job_no += 1
         self.sampling_step = 0
         self.current_image_sampling_step = 0
+        
+    def get_job_timestamp(self):
+        return datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 state = State()
 
-artist_db = modules.artists.ArtistsDatabase(cmd_opts.artists_file)
+artists_filename = cmd_opts.artists_file
+artist_db = modules.artists.ArtistsDatabase(artists_filename)
 
 styles_filename = cmd_opts.styles_file
 prompt_styles = modules.styles.StyleDatabase(styles_filename)
@@ -114,13 +118,13 @@ prompt_styles = modules.styles.StyleDatabase(styles_filename)
 interrogator = modules.interrogate.InterrogateModels("interrogate")
 
 face_restorers = []
-
-modules.sd_models.list_models()
+# This was moved to webui.py with the other model "setup" calls.
+# modules.sd_models.list_models()
 
 
 def realesrgan_models_names():
     import modules.realesrgan_model
-    return [x.name for x in modules.realesrgan_model.get_realesrgan_models()]
+    return [x.name for x in modules.realesrgan_model.get_realesrgan_models(None)]
 
 
 class OptionInfo:
@@ -162,6 +166,7 @@ options_templates.update(options_section(('saving-images', "Saving images/grids"
     "export_for_4chan": OptionInfo(True, "If PNG image is larger than 4MB or any dimension is larger than 4000, downscale and save copy as JPG"),
 
     "use_original_name_batch": OptionInfo(False, "Use original name for output filename during batch process in extras tab"),
+    "save_selected_only": OptionInfo(True, "When using 'Save' button, only save a single selected image"),
 }))
 
 options_templates.update(options_section(('saving-paths', "Paths for saving"), {
@@ -185,13 +190,10 @@ options_templates.update(options_section(('saving-to-dirs', "Saving to a directo
 options_templates.update(options_section(('upscaling', "Upscaling"), {
     "ESRGAN_tile": OptionInfo(192, "Tile size for ESRGAN upscalers. 0 = no tiling.", gr.Slider, {"minimum": 0, "maximum": 512, "step": 16}),
     "ESRGAN_tile_overlap": OptionInfo(8, "Tile overlap, in pixels for ESRGAN upscalers. Low values = visible seam.", gr.Slider, {"minimum": 0, "maximum": 48, "step": 1}),
-    "realesrgan_enabled_models": OptionInfo(["Real-ESRGAN 4x plus", "Real-ESRGAN 4x plus anime 6B"], "Select which RealESRGAN models to show in the web UI. (Requires restart)", gr.CheckboxGroup, lambda: {"choices": realesrgan_models_names()}),
+    "realesrgan_enabled_models": OptionInfo(["R-ESRGAN x4+", "R-ESRGAN x4+ Anime6B"], "Select which Real-ESRGAN models to show in the web UI. (Requires restart)", gr.CheckboxGroup, lambda: {"choices": realesrgan_models_names()}),
     "SWIN_tile": OptionInfo(192, "Tile size for all SwinIR.", gr.Slider, {"minimum": 16, "maximum": 512, "step": 16}),
     "SWIN_tile_overlap": OptionInfo(8, "Tile overlap, in pixels for SwinIR. Low values = visible seam.", gr.Slider, {"minimum": 0, "maximum": 48, "step": 1}),
     "ldsr_steps": OptionInfo(100, "LDSR processing steps. Lower = faster", gr.Slider, {"minimum": 1, "maximum": 200, "step": 1}),
-    "ldsr_pre_down": OptionInfo(1, "LDSR Pre-process downssample scale. 1 = no down-sampling, 4 = 1/4 scale.", gr.Slider, {"minimum": 1, "maximum": 4, "step": 1}),
-    "ldsr_post_down": OptionInfo(1, "LDSR Post-process down-sample scale. 1 = no down-sampling, 4 = 1/4 scale.", gr.Slider, {"minimum": 1, "maximum": 4, "step": 1}),
-
     "upscaler_for_img2img": OptionInfo(None, "Upscaler for img2img", gr.Radio, lambda: {"choices": [x.name for x in sd_upscalers]}),
 }))
 
@@ -199,7 +201,6 @@ options_templates.update(options_section(('face-restoration', "Face restoration"
     "face_restoration_model": OptionInfo(None, "Face restoration model", gr.Radio, lambda: {"choices": [x.name() for x in face_restorers]}),
     "code_former_weight": OptionInfo(0.5, "CodeFormer weight parameter; 0 = maximum effect; 1 = minimum effect", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.01}),
     "face_restoration_unload": OptionInfo(False, "Move face restoration model from VRAM into RAM after processing"),
-    "save_selected_only": OptionInfo(False, "When using 'Save' button, only save a single selected image"),
 }))
 
 options_templates.update(options_section(('system', "System"), {
@@ -209,12 +210,13 @@ options_templates.update(options_section(('system', "System"), {
 }))
 
 options_templates.update(options_section(('sd', "Stable Diffusion"), {
-    "sd_model_checkpoint": OptionInfo(None, "Stable Diffusion checkpoint", gr.Radio, lambda: {"choices": [x.title for x in modules.sd_models.checkpoints_list.values()]}),
+    "sd_model_checkpoint": OptionInfo(None, "Stable Diffusion checkpoint", gr.Dropdown, lambda: {"choices": modules.sd_models.checkpoint_tiles()}),
     "img2img_color_correction": OptionInfo(False, "Apply color correction to img2img results to match original colors."),
-    "save_images_before_color_correction": OptionInfo(False, "Save a copy of image before applying color correction to img2img results"),    
+    "save_images_before_color_correction": OptionInfo(False, "Save a copy of image before applying color correction to img2img results"),
     "img2img_fix_steps": OptionInfo(False, "With img2img, do exactly the amount of steps the slider specifies (normally you'd do less with less denoising)."),
     "enable_quantization": OptionInfo(False, "Enable quantization in K samplers for sharper and cleaner results. This may change existing seeds. Requires restart to apply."),
-    "enable_emphasis": OptionInfo(True, "Use (text) to make model pay more attention to text and [text] to make it pay less attention"),
+    "enable_emphasis": OptionInfo(True, "Eemphasis: use (text) to make model pay more attention to text and [text] to make it pay less attention"),
+    "use_old_emphasis_implementation": OptionInfo(False, "Use old emphasis implementation. Can be useful to reproduce old seeds."),
     "enable_batch_seeds": OptionInfo(True, "Make K-diffusion samplers produce same images in a batch as when making a single image"),
     "filter_nsfw": OptionInfo(False, "Filter NSFW content"),
     "random_artist_categories": OptionInfo([], "Allowed categories for random artists selection when using the Roll button", gr.CheckboxGroup, {"choices": artist_db.categories()}),
@@ -239,6 +241,14 @@ options_templates.update(options_section(('ui', "User interface"), {
     "js_modal_lightbox_initialy_zoomed": OptionInfo(True, "Show images zoomed in by default in full page image viewer"),
 }))
 
+options_templates.update(options_section(('sampler-params', "Sampler parameters"), {
+  "eta_ddim": OptionInfo(0.0, "eta (noise multiplier) for DDIM", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
+  "eta_ancestral": OptionInfo(1.0, "eta (noise multiplier) for ancestral samplers", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
+  "ddim_discretize": OptionInfo('uniform', "img2img DDIM discretize", gr.Radio, {"choices": ['uniform', 'quad']}),
+  's_churn': OptionInfo(0.0, "sigma churn", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
+  's_tmin':  OptionInfo(0.0, "sigma tmin",  gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
+  's_noise': OptionInfo(1.0, "sigma noise", gr.Slider, {"minimum": 0.0, "maximum": 1.0, "step": 0.01}),
+}))
 
 class Options:
     data = None
