@@ -57,6 +57,7 @@ MANIFEST
 *.ckpt
 *.ckpt.*
 outputs/*
+BSRGAN/
 ESRGAN/
 GFPGAN/
 LDSR/
