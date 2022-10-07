@@ -38,3 +38,4 @@ git+https://github.com/illeatmyhat/taming-transformers.git@master#egg=taming-tra
 git+https://github.com/openai/CLIP@d50d76daa670286dd6cacf3bcd80b5e4823fc8e1
 git+https://github.com/hlky/k-diffusion-sd#egg=k_diffusion
 webdataset
+lark
