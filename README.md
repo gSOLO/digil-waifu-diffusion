@@ -28,7 +28,7 @@ Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1
 - Attention, specify parts of text that the model should pay more attention to
     - a man in a ((tuxedo)) - will pay more attention to tuxedo
     - a man in a (tuxedo:1.21) - alternative syntax
-    - select text and press ctrl+up or ctrl+down to aduotmatically adjust attention to selected text
+    - select text and press ctrl+up or ctrl+down to automatically adjust attention to selected text (code contributed by anonymous user)
 - Loopback, run img2img processing multiple times
 - X/Y plot, a way to draw a 2 dimensional plot of images with different parameters
 - Textual Inversion
@@ -46,7 +46,7 @@ Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1
 - Sampling method selection
 - Interrupt processing at any time
 - 4GB video card support (also reports of 2GB working)
-- Correct seeds for batches 
+- Correct seeds for batches
 - Prompt length validation
      - get length of prompt in tokens as you type
      - get a warning after generation if some text was truncated
@@ -77,6 +77,7 @@ Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1
 - [Composable-Diffusion](https://energy-based-model.github.io/Compositional-Visual-Generation-with-Composable-Diffusion-Models/), a way to use multiple prompts at once
      - separate prompts using uppercase `AND`
      - also supports weights for prompts: `a cat :1.2 AND a dog AND a penguin :2.2`
+- No token limit for prompts (original stable diffusion lets you use up to 75 tokens)
 
 ## Stable Diffusion
 
