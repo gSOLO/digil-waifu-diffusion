@@ -78,6 +78,7 @@ Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1
      - separate prompts using uppercase `AND`
      - also supports weights for prompts: `a cat :1.2 AND a dog AND a penguin :2.2`
 - No token limit for prompts (original stable diffusion lets you use up to 75 tokens)
+- DeepDanbooru integration, creates danbooru style tags for anime prompts (add --deepdanbooru to commandline args)
 
 ## Stable Diffusion
 
