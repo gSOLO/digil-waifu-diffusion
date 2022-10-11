@@ -14,7 +14,7 @@ Model Link: https://huggingface.co/hakurei/waifu-diffusion
 
 ## Web UI, GFPGAN, Real-ESRGAN, ESRGAN, and More
 
-Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui) *(webui.cmd)*, to drive a number of settings and additional features (e.x. [GFPGAN](https://github.com/gSOLO/GFPGAN) for face fixing, and [Real-ESRGAN](https://github.com/gSOLO/Real-ESRGAN) for upscaling).
+Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1111/stable-diffusion-webui), to drive a number of settings and additional features (e.x. [GFPGAN](https://github.com/gSOLO/GFPGAN) for face fixing, and [Real-ESRGAN](https://github.com/gSOLO/Real-ESRGAN) for upscaling).
 
 ## Web UI Features
 
