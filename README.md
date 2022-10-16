@@ -18,7 +18,7 @@ Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1
 
 ## Web UI Features
 
-[Detailed feature showcase with images](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Features):
+[Detailed feature showcase with images](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Features)
 - Original txt2img and img2img modes
 - One click install and run script (but you still must install python and git)
 - Outpainting
@@ -40,10 +40,12 @@ Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1
     - CodeFormer, face restoration tool as an alternative to GFPGAN
     - RealESRGAN, neural network upscaler
     - ESRGAN, neural network upscaler with a lot of third party models
-    - SwinIR, neural network upscaler
+    - SwinIR and Swin2SR([see here](https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/2092)), neural network upscalers
     - LDSR, Latent diffusion super resolution upscaling
 - Resizing aspect ratio options
 - Sampling method selection
+    - Adjust sampler eta values (noise multiplier)
+    - More advanced noise setting options
 - Interrupt processing at any time
 - 4GB video card support (also reports of 2GB working)
 - Correct seeds for batches
@@ -79,6 +81,7 @@ Has an implemetation of the [AUTOMATIC1111 Web UI](https://github.com/AUTOMATIC1
      - also supports weights for prompts: `a cat :1.2 AND a dog AND a penguin :2.2`
 - No token limit for prompts (original stable diffusion lets you use up to 75 tokens)
 - DeepDanbooru integration, creates danbooru style tags for anime prompts (add --deepdanbooru to commandline args)
+- [xformers](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Xformers), major speed increase for select cards: (add --xformers to commandline args)
 
 ## Stable Diffusion
 
