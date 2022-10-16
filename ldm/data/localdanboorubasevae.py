@@ -4,6 +4,10 @@ import PIL
 from PIL import Image, ImageOps
 from torch.utils.data import Dataset
 from torchvision import transforms
+import torchvision.transforms.functional as TF
+
+from functools import partial
+import copy
 
 import glob
 
@@ -39,55 +43,16 @@ def resize_image(image: Image, max_size=(768,768)):
     return res
 
 class CaptionProcessor(object):
-    def __init__(self, copyright_rate, character_rate, general_rate, artist_rate, normalize, caption_shuffle, transforms, max_size, resize, random_order):
-        self.copyright_rate = copyright_rate
-        self.character_rate = character_rate
-        self.general_rate = general_rate
-        self.artist_rate = artist_rate
-        self.normalize = normalize
-        self.caption_shuffle = caption_shuffle
+    def __init__(self, transforms, max_size, resize, random_order, LR_size):
         self.transforms = transforms
         self.max_size = max_size
         self.resize = resize
         self.random_order = random_order
+        self.degradation_process = partial(TF.resize, size=LR_size, interpolation=TF.InterpolationMode.NEAREST)
     
-    def clean(self, text: str):
-        text = ' '.join(set([i.lstrip('_').rstrip('_') for i in re.sub(r'\([^)]*\)', '', text).split(' ')])).lstrip().rstrip()
-        if self.caption_shuffle:
-            text = text.split(' ')
-            random.shuffle(text)
-            text = ' '.join(text)
-        if self.normalize:
-            text = ', '.join([i.replace('_', ' ') for i in text.split(' ')]).lstrip(', ').rstrip(', ')
-        return text
-
-    def get_key(self, val_dict, key, clean_val = True, cond_drop = 0.0, prepend_space = False, append_comma = False):
-        space = ' ' if prepend_space else ''
-        comma = ',' if append_comma else ''
-        if random.random() < cond_drop:
-            if (key in val_dict) and val_dict[key]:
-                if clean_val:
-                    return space + self.clean(val_dict[key]) + comma
-                else:
-                    return space + val_dict[key] + comma
-        return ''
-
     def __call__(self, sample):
         # preprocess caption
-        caption_data = json.loads(sample['caption'])
-        if not self.random_order:
-            character = self.get_key(caption_data, 'tag_string_character', True, self.character_rate, False, True)
-            copyright = self.get_key(caption_data, 'tag_string_copyright', True, self.copyright_rate, True, True)
-            artist = self.get_key(caption_data, 'tag_string_artist', True, self.artist_rate, True, True)
-            general = self.get_key(caption_data, 'tag_string_general', True, self.general_rate, True, False)
-            tag_str = f'{character}{copyright}{artist}{general}'.lstrip().rstrip(',')
-        else:
-            character = self.get_key(caption_data, 'tag_string_character', False, self.character_rate, False)
-            copyright = self.get_key(caption_data, 'tag_string_copyright', False, self.copyright_rate, True, False)
-            artist = self.get_key(caption_data, 'tag_string_artist', False, self.artist_rate, True, False)
-            general = self.get_key(caption_data, 'tag_string_general', False, self.general_rate, True, False)
-            tag_str = self.clean(f'{character}{copyright}{artist}{general}').lstrip().rstrip(' ')
-        sample['caption'] = tag_str
+        pass
 
         # preprocess image
         image = sample['image']
@@ -95,27 +60,33 @@ class CaptionProcessor(object):
         if self.resize:
             image = resize_image(image, max_size=(self.max_size, self.max_size))
         image = self.transforms(image)
+        lr_image = copy.deepcopy(image)
         image = np.array(image).astype(np.uint8)
         sample['image'] = (image / 127.5 - 1.0).astype(np.float32)
+
+        # preprocess LR image
+        lr_image = self.degradation_process(lr_image)
+        lr_image = np.array(lr_image).astype(np.uint8)
+        sample['LR_image'] = (lr_image/127.5 - 1.0).astype(np.float32)
+
         return sample
 
-class LocalDanbooruBase(Dataset):
+class LocalDanbooruBaseVAE(Dataset):
     def __init__(self,
                  data_root='./danbooru-aesthetic',
-                 size=768,
+                 size=256,
                  interpolation="bicubic",
                  flip_p=0.5,
                  crop=True,
                  shuffle=False,
                  mode='train',
                  val_split=64,
-                 ucg=0.1,
+                 downscale_f=8
                  ):
         super().__init__()
 
         self.shuffle=shuffle
         self.crop = crop
-        self.ucg = ucg
 
         print('Fetching data.')
 
@@ -125,25 +96,24 @@ class LocalDanbooruBase(Dataset):
         if mode == 'val':
             self.image_files = self.image_files[:len(self.image_files)//val_split]
 
-        print(f'Constructing image-caption map. Found {len(self.image_files)} images')
+        print(f'Constructing image map. Found {len(self.image_files)} images')
 
         self.examples = {}
         self.hashes = []
         for i in self.image_files:
             hash = i[len(f'{data_root}/'):].split('.')[0]
             self.examples[hash] = {
-                'image': i,
-                'text': f'{data_root}/{hash}.caption'
+                'image': i
             }
             self.hashes.append(hash)
 
-        print(f'image-caption map has {len(self.examples.keys())} examples')
+        print(f'image map has {len(self.examples.keys())} examples')
 
         self.size = size
-        self.interpolation = {"linear": PIL.Image.Resampling.BILINEAR,
-                              "bilinear": PIL.Image.Resampling.BILINEAR,
-                              "bicubic": PIL.Image.Resampling.BICUBIC,
-                              "lanczos": PIL.Image.Resampling.LANCZOS,
+        self.interpolation = {"linear": PIL.Image.LINEAR,
+                              "bilinear": PIL.Image.BILINEAR,
+                              "bicubic": PIL.Image.BICUBIC,
+                              "lanczos": PIL.Image.LANCZOS,
                               }[interpolation]
         self.flip = transforms.RandomHorizontalFlip(p=flip_p)
 
@@ -151,7 +121,7 @@ class LocalDanbooruBase(Dataset):
         image_transforms.extend([torchvision.transforms.RandomHorizontalFlip(flip_p)],)
         image_transforms = torchvision.transforms.Compose(image_transforms)
 
-        self.captionprocessor = CaptionProcessor(1.0, 1.0, 1.0, 1.0, True, True, image_transforms, 768, False, True)
+        self.captionprocessor = CaptionProcessor(image_transforms, self.size, True, True, int(size / downscale_f))
 
     def random_sample(self):
         return self.__getitem__(random.randint(0, self.__len__() - 1))
@@ -176,16 +146,11 @@ class LocalDanbooruBase(Dataset):
             image_file = self.examples[self.hashes[i]]['image']
             with open(image_file, 'rb') as f:
                 image['image'] = f.read()
-            text_file = self.examples[self.hashes[i]]['text']
-            with open(text_file, 'rb') as f:
-                image['caption'] = f.read()
             image = self.captionprocessor(image)
-            if random.random() < self.ucg:
-                image['caption'] = ''
         except Exception as e:
             print(f'Error with {self.examples[self.hashes[i]]["image"]} -- {e} -- skipping {i}')
             return self.skip_sample(i)
-
+        
         return image
 
 """
