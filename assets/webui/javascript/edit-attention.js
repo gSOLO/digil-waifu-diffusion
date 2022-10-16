@@ -2,6 +2,8 @@ addEventListener('keydown', (event) => {
 	let target = event.originalTarget || event.composedPath()[0];
 	if (!target.hasAttribute("placeholder")) return;
 	if (!target.placeholder.toLowerCase().includes("prompt")) return;
+	if (! (event.metaKey || event.ctrlKey)) return;
+
 
 	let plus = "ArrowUp"
 	let minus = "ArrowDown"
@@ -25,6 +27,7 @@ addEventListener('keydown', (event) => {
 	} else {
 		end = target.value.slice(selectionEnd + 1).indexOf(")") + 1;
 		weight = parseFloat(target.value.slice(selectionEnd + 1, selectionEnd + 1 + end));
+		if (isNaN(weight)) return;
 		if (event.key == minus) weight -= 0.1;
 		if (event.key == plus) weight += 0.1;
 
@@ -38,4 +41,7 @@ addEventListener('keydown', (event) => {
 		target.selectionStart = selectionStart;
 		target.selectionEnd = selectionEnd;
 	}
+	// Since we've modified a Gradio Textbox component manually, we need to simulate an `input` DOM event to ensure its
+	// internal Svelte data binding remains in sync.
+	target.dispatchEvent(new Event("input", { bubbles: true }));
 });
