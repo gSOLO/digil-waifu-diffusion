@@ -4,7 +4,7 @@ opencv-python
 pudb==2019.2
 imageio==2.9.0
 imageio-ffmpeg==0.4.2
-pytorch-lightning==1.6.0
+pytorch-lightning==1.7.7
 omegaconf==2.1.1
 test-tube>=0.7.5
 streamlit>=0.73.1
@@ -39,3 +39,4 @@ git+https://github.com/openai/CLIP@d50d76daa670286dd6cacf3bcd80b5e4823fc8e1
 git+https://github.com/hlky/k-diffusion-sd#egg=k_diffusion
 webdataset
 lark
+wandb
