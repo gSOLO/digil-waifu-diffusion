@@ -6,6 +6,10 @@ function get_uiCurrentTab() {
     return gradioApp().querySelector('.tabs button:not(.border-transparent)')
 }
 
+function get_uiCurrentTabContent() {
+    return gradioApp().querySelector('.tabitem[id^=tab_]:not([style*="display: none"])')
+}
+
 uiUpdateCallbacks = []
 uiTabChangeCallbacks = []
 let uiCurrentTab = null
@@ -46,12 +50,15 @@ document.addEventListener("DOMContentLoaded", function() {
  document.addEventListener('keydown', function(e) {
     var handled = false;
     if (e.key !== undefined) {
-        if((e.key == "Enter" && (e.metaKey || e.ctrlKey))) handled = true;
+        if((e.key == "Enter" && (e.metaKey || e.ctrlKey || e.altKey))) handled = true;
     } else if (e.keyCode !== undefined) {
-        if((e.keyCode == 13 && (e.metaKey || e.ctrlKey))) handled = true;
+        if((e.keyCode == 13 && (e.metaKey || e.ctrlKey || e.altKey))) handled = true;
     }
-    if (handled) { 
-        gradioApp().querySelector("#txt2img_generate").click(); 
+    if (handled) {
+        button = get_uiCurrentTabContent().querySelector('button[id$=_generate]');
+        if (button) {
+            button.click();
+        }
         e.preventDefault();
     }
 })

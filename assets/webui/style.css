@@ -2,6 +2,27 @@
     max-width: 100%;
 }
 
+#txt2img_token_counter {
+    height: 0px;
+}
+
+#img2img_token_counter {
+    height: 0px;
+}
+
+#sh{
+    min-width: 2em;
+    min-height: 2em;
+    max-width: 2em;
+    max-height: 2em;
+    flex-grow: 0;
+    padding-left: 0.25em;
+    padding-right: 0.25em;
+    margin: 0.1em 0;
+    opacity: 0%;
+    cursor: default;	
+}
+
 .output-html p {margin: 0 0.5em;}
 
 .row > *,
@@ -94,7 +115,7 @@
     padding: 0.4em 0;
 }
 
-#roll, #paste{
+#roll, #paste, #style_create, #style_apply{
     min-width: 2em;
     min-height: 2em;
     max-width: 2em;
@@ -105,14 +126,14 @@
     margin: 0.1em 0;
 }
 
-#style_apply, #style_create, #interrogate{
-    margin: 0.75em 0.25em 0.25em 0.25em;
-    min-width: 5em;
+#interrogate_col{
+    min-width: 0 !important;
+    max-width: 8em !important;
 }
-
-#style_apply, #style_create, #deepbooru{
-    margin: 0.75em 0.25em 0.25em 0.25em;
-    min-width: 5em;
+#interrogate, #deepbooru{
+    margin: 0em 0.25em 0.9em 0.25em;
+    min-width: 8em;
+    max-width: 8em;
 }
 
 #style_pos_col, #style_neg_col{
@@ -144,18 +165,6 @@
 
 button{
     align-self: stretch !important;
-}
-
-#prompt, #negative_prompt{
-    border: none !important;
-}
-#prompt textarea, #negative_prompt textarea{
-    border: none !important;
-}
-
-
-#img2maskimg .h-60{
-    height: 30rem;
 }
 
 .overflow-hidden, .gr-panel{
@@ -207,6 +216,8 @@ fieldset span.text-gray-500, .gr-block.gr-box span.text-gray-500,  label.block s
     border-top: 1px solid #eee;
     border-left: 1px solid #eee;
     border-right: 1px solid #eee;
+
+    z-index: 300;
 }
 
 .dark fieldset span.text-gray-500, .dark .gr-block.gr-box span.text-gray-500, .dark label.block span{
@@ -219,17 +230,11 @@ fieldset span.text-gray-500, .gr-block.gr-box span.text-gray-500,  label.block s
 #settings fieldset span.text-gray-500, #settings .gr-block.gr-box span.text-gray-500, #settings label.block span{
     position: relative;
     border: none;
+    margin-right: 8em;
 }
 
 .gr-panel div.flex-col div.justify-between label span{
     margin: 0;
-}
-
-.gr-panel div.flex-col div.justify-between div{
-  position: absolute;
-  top: -0.1em;
-  right: 1em;
-  padding: 0 0.5em;
 }
 
 #settings .gr-panel div.flex-col div.justify-between div{
@@ -304,6 +309,8 @@ input[type="range"]{
   height: 100%;
   overflow: auto;
   background-color: rgba(20, 20, 20, 0.95);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .modalControls {
@@ -427,10 +434,6 @@ input[type="range"]{
     --tw-bg-opacity: 0 !important;
 }
 
-#img2img_image div.h-60{
-    height: 480px;
-}
-
 #context-menu{
     z-index:9999;
     position:absolute;
@@ -458,19 +461,58 @@ input[type="range"]{
     background: #a55000;
 }
 
+#quicksettings {
+    gap: 0.4em;
+}
+
 #quicksettings > div{
     border: none;
     background: none;
+    flex: unset;
+    gap: 0.5em;
 }
 
 #quicksettings > div > div{
     max-width: 32em;
+    min-width: 24em;
     padding: 0;
 }
+
+#refresh_sd_model_checkpoint, #refresh_sd_hypernetwork{
+    max-width: 2.5em;
+    min-width: 2.5em;
+    height: 2.4em;
+}
+
 
 canvas[key="mask"] {
     z-index: 12 !important;
     filter: invert();
     mix-blend-mode: multiply;
     pointer-events: none;
+}
+
+
+/* gradio 3.4.1 stuff for editable scrollbar values */
+.gr-box > div > div > input.gr-text-input{
+    position: absolute;
+    right: 0.5em;
+    top: -0.6em;
+    z-index: 200;
+    width: 8em;
+}
+#quicksettings .gr-box > div > div > input.gr-text-input {
+  top: -1.12em;
+}
+
+.row.gr-compact{
+    overflow: visible;
+}
+
+#img2img_image, #img2img_image > .h-60, #img2img_image > .h-60 > div, #img2img_image > .h-60 > div > img,
+img2maskimg, #img2maskimg > .h-60, #img2maskimg > .h-60 > div, #img2maskimg > .h-60 > div > img
+{
+    height: 480px !important;
+    max-height: 480px !important;
+    min-height: 480px !important;
 }

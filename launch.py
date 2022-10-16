@@ -9,6 +9,7 @@ import platform
 dir_repos = "repositories"
 python = sys.executable
 git = os.environ.get('GIT', "git")
+index_url = os.environ.get('INDEX_URL', "")
 
 
 def extract_arg(args, name):
@@ -57,7 +58,8 @@ def run_python(code, desc=None, errdesc=None):
 
 
 def run_pip(args, desc=None):
-    return run(f'"{python}" -m pip {args} --prefer-binary', desc=f"Installing {desc}", errdesc=f"Couldn't install {desc}")
+    index_url_line = f' --index-url {index_url}' if index_url != '' else ''
+    return run(f'"{python}" -m pip {args} --prefer-binary{index_url_line}', desc=f"Installing {desc}", errdesc=f"Couldn't install {desc}")
 
 
 def check_run_python(code):
@@ -76,7 +78,7 @@ def git_clone(url, dir, name, commithash=None):
             return
 
         run(f'"{git}" -C {dir} fetch', f"Fetching updates for {name}...", f"Couldn't fetch {name}")
-        run(f'"{git}" -C {dir} checkout {commithash}', f"Checking out commint for {name} with hash: {commithash}...", f"Couldn't checkout commit {commithash} for {name}")
+        run(f'"{git}" -C {dir} checkout {commithash}', f"Checking out commit for {name} with hash: {commithash}...", f"Couldn't checkout commit {commithash} for {name}")
         return
 
     run(f'"{git}" clone "{url}" "{dir}"', f"Cloning {name} into {dir}...", f"Couldn't clone {name}")
@@ -102,8 +104,10 @@ def prepare_enviroment():
     args = shlex.split(commandline_args)
 
     args, skip_torch_cuda_test = extract_arg(args, '--skip-torch-cuda-test')
+    args, reinstall_xformers = extract_arg(args, '--reinstall-xformers')
     xformers = '--xformers' in args
     deepdanbooru = '--deepdanbooru' in args
+    ngrok = '--ngrok' in args
 
     try:
         commit = run(f"{git} rev-parse HEAD").strip()
@@ -125,14 +129,17 @@ def prepare_enviroment():
     if not is_installed("clip"):
         run_pip(f"install {clip_package}", "clip")
 
-    if not is_installed("xformers") and xformers and platform.python_version().startswith("3.10"):
+    if (not is_installed("xformers") or reinstall_xformers) and xformers and platform.python_version().startswith("3.10"):
         if platform.system() == "Windows":
-            run_pip("install https://github.com/C43H66N12O12S2/stable-diffusion-webui/releases/download/c/xformers-0.0.14.dev0-cp310-cp310-win_amd64.whl", "xformers")
+            run_pip("install -U -I --no-deps https://github.com/C43H66N12O12S2/stable-diffusion-webui/releases/download/f/xformers-0.0.14.dev0-cp310-cp310-win_amd64.whl", "xformers")
         elif platform.system() == "Linux":
             run_pip("install xformers", "xformers")
 
     if not is_installed("deepdanbooru") and deepdanbooru:
         run_pip("install git+https://github.com/KichangKim/DeepDanbooru.git@edf73df4cdaeea2cf00e9ac08bd8a9026b7a7b26#egg=deepdanbooru[tensorflow] tensorflow==2.10.0 tensorflow-io==0.27.0", "deepdanbooru")
+
+    if not is_installed("pyngrok") and ngrok:
+        run_pip("install pyngrok", "ngrok")
 
     os.makedirs(dir_repos, exist_ok=True)
 
