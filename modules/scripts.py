@@ -1,3 +1,10 @@
+# Digil Diffusion
+#
+# Use scripts at scripts/webui
+#   "scripts"
+#   "scripts/webui"
+
+
 import os
 import sys
 import traceback
@@ -140,7 +147,7 @@ def load_scripts():
     scripts_data.clear()
     script_callbacks.clear_callbacks()
 
-    scripts_list = list_scripts("scripts", ".py")
+    scripts_list = list_scripts("scripts/webui", ".py")
 
     syspath = sys.path
 

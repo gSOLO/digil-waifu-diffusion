@@ -1707,7 +1707,7 @@ Requested path was: {f}
             css += file.read() + "\n"
 
     if os.path.exists(os.path.join(script_path, "assets/webui/user.css")):
-        with open(os.path.join(script_path, "user.css"), "r", encoding="utf8") as file:
+        with open(os.path.join(script_path, "assets/webui/user.css"), "r", encoding="utf8") as file:
             css += file.read() + "\n"
 
     if not cmd_opts.no_progressbar_hiding:
