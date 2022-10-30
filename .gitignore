@@ -81,6 +81,7 @@ src/taming-transformers/
 /GFPGANv1.4.pth
 /gfpgan/weights/*.pth
 /docs
+docs/*
 /log
 /interrogate
 /.idea
