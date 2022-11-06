@@ -1,5 +1,9 @@
+# Install bitsandbytes:
+# `nvcc --version` to get CUDA version.
+# `pip install -i https://test.pypi.org/simple/ bitsandbytes-cudaXXX` to install for current CUDA.
 # Example Usage:
-# torchrun --nproc_per_node=2 trainer_dist.py --model="CompVis/stable-diffusion-v1-4" --run_name="liminal" --dataset="liminal-dataset" --hf_token="hf_blablabla" --bucket_side_min=64 --use_8bit_adam=True --gradient_checkpointing=True --batch_size=10 --fp16=True --image_log_steps=250 --epochs=20 --resolution=768 --use_ema=True
+# Single GPU: torchrun --nproc_per_node=1 trainer_dist.py --model="CompVis/stable-diffusion-v1-4" --run_name="liminal" --dataset="liminal-dataset" --hf_token="hf_blablabla" --bucket_side_min=64 --use_8bit_adam=True --gradient_checkpointing=True --batch_size=10 --fp16=True --image_log_steps=250 --epochs=20 --resolution=768 --use_ema=True
+# Multiple GPUs: torchrun --nproc_per_node=N trainer_dist.py --model="CompVis/stable-diffusion-v1-4" --run_name="liminal" --dataset="liminal-dataset" --hf_token="hf_blablabla" --bucket_side_min=64 --use_8bit_adam=True --gradient_checkpointing=True --batch_size=10 --fp16=True --image_log_steps=250 --epochs=20 --resolution=768 --use_ema=True
 
 import argparse
 import socket
@@ -19,6 +23,9 @@ import gc
 import time
 import itertools
 import numpy as np
+import json
+import re
+import traceback
 
 try:
     pynvml.nvmlInit()
@@ -26,7 +33,7 @@ except pynvml.nvml.NVMLError_LibraryNotFound:
     pynvml = None
 
 from typing import Iterable
-from diffusers import AutoencoderKL, UNet2DConditionModel, DDPMScheduler, PNDMScheduler, StableDiffusionPipeline
+from diffusers import AutoencoderKL, UNet2DConditionModel, DDPMScheduler, PNDMScheduler, DDIMScheduler, StableDiffusionPipeline
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from diffusers.optimization import get_scheduler
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
@@ -41,8 +48,10 @@ torch.backends.cuda.matmul.allow_tf32 = True
 # TODO: add custom VAE support. should be simple with diffusers
 parser = argparse.ArgumentParser(description='Stable Diffusion Finetuner')
 parser.add_argument('--model', type=str, default=None, required=True, help='The name of the model to use for finetuning. Could be HuggingFace ID or a directory')
+parser.add_argument('--resume', type=str, default=None, help='The path to the checkpoint to resume from. If not specified, will create a new run.')
 parser.add_argument('--run_name', type=str, default=None, required=True, help='Name of the finetune run.')
 parser.add_argument('--dataset', type=str, default=None, required=True, help='The path to the dataset to use for finetuning.')
+parser.add_argument('--num_buckets', type=int, default=16, help='The number of buckets.')
 parser.add_argument('--bucket_side_min', type=int, default=256, help='The minimum side length of a bucket.')
 parser.add_argument('--bucket_side_max', type=int, default=768, help='The maximum side length of a bucket.')
 parser.add_argument('--lr', type=float, default=5e-6, help='Learning rate')
@@ -56,6 +65,8 @@ parser.add_argument('--adam_beta1', type=float, default=0.9, help='Adam beta1')
 parser.add_argument('--adam_beta2', type=float, default=0.999, help='Adam beta2')
 parser.add_argument('--adam_weight_decay', type=float, default=1e-2, help='Adam weight decay')
 parser.add_argument('--adam_epsilon', type=float, default=1e-08, help='Adam epsilon')
+parser.add_argument('--lr_scheduler', type=str, default='cosine', help='Learning rate scheduler [`cosine`, `linear`, `constant`]')
+parser.add_argument('--lr_scheduler_warmup', type=float, default=0.05, help='Learning rate scheduler warmup steps. This is a percentage of the total number of steps in the training run. 0.1 means 10 percent of the total number of steps.')
 parser.add_argument('--seed', type=int, default=42, help='Seed for random number generator, this is to be used for reproduceability purposes.')
 parser.add_argument('--output_path', type=str, default='./output', help='Root path for all outputs.')
 parser.add_argument('--save_steps', type=int, default=500, help='Number of steps to save checkpoints at.')
@@ -66,6 +77,10 @@ parser.add_argument('--project_id', type=str, default='diffusers', help='Project
 parser.add_argument('--fp16', dest='fp16', type=bool, default=False, help='Train in mixed precision')
 parser.add_argument('--image_log_steps', type=int, default=100, help='Number of steps to log images at.')
 parser.add_argument('--image_log_amount', type=int, default=4, help='Number of images to log every image_log_steps')
+parser.add_argument('--image_log_inference_steps', type=int, default=50, help='Number of inference steps to use to log images.')
+parser.add_argument('--image_log_scheduler', type=str, default="PNDMScheduler", help='Number of inference steps to use to log images.')
+parser.add_argument('--clip_penultimate', type=bool, default=False, help='Use penultimate CLIP layer for text embedding')
+parser.add_argument('--output_bucket_info', type=bool, default=False, help='Outputs bucket information and exits')
 args = parser.parse_args()
 
 def setup():
@@ -83,17 +98,6 @@ def get_world_size() -> int:
     if not torch.distributed.is_initialized():
         return 1
     return torch.distributed.get_world_size()
-
-# Inform the user of host, and various versions -- useful for debugging isseus.
-print("RUN_NAME:", args.run_name)
-print("HOST:", socket.gethostname())
-print("CUDA:", torch.version.cuda)
-print("TORCH:", torch.__version__)
-print("TRANSFORMERS:", transformers.__version__)
-print("DIFFUSERS:", diffusers.__version__)
-print("MODEL:", args.model)
-print("FP16:", args.fp16)
-print("RESOLUTION:", args.resolution)
 
 def get_gpu_ram() -> str:
     """
@@ -142,22 +146,31 @@ class ImageStore:
 
         self.image_files = []
         [self.image_files.extend(glob.glob(f'{data_dir}' + '/*.' + e)) for e in ['jpg', 'jpeg', 'png', 'bmp', 'webp']]
+        self.image_files = [x for x in self.image_files if self.__valid_file(x)]
 
     def __len__(self) -> int:
         return len(self.image_files)
-    
+
+    def __valid_file(self, f) -> bool:
+        try:
+            Image.open(f)
+            return True
+        except:
+            print(f'WARNING: Unable to open file: {f}')
+            return False
+
     # iterator returns images as PIL images and their index in the store
     def entries_iterator(self) -> Generator[Tuple[Image.Image, int], None, None]:
         for f in range(len(self)):
             yield Image.open(self.image_files[f]), f
-    
+
     # get image by index
     def get_image(self, index: int) -> Image.Image:
         return Image.open(self.image_files[index])
-    
+
     # gets caption by removing the extension from the filename and replacing it with .txt
     def get_caption(self, index: int) -> str:
-        filename = self.image_files[index].split('.')[0] + '.txt'
+        filename = re.sub('\.[^/.]+$', '', self.image_files[index]) + '.txt'
         with open(filename, 'r') as f:
             return f.read()
 
@@ -176,7 +189,7 @@ class AspectBucket:
                  bucket_side_increment: int = 64,
                  max_image_area: int = 512 * 768,
                  max_ratio: float = 2):
-        
+
         self.requested_bucket_count = num_buckets
         self.bucket_length_min = bucket_side_min
         self.bucket_length_max = bucket_side_max
@@ -189,7 +202,7 @@ class AspectBucket:
             self.max_ratio = float('inf')
         else:
             self.max_ratio = max_ratio
-        
+
         self.store = store
         self.buckets = []
         self._bucket_ratios = []
@@ -197,12 +210,12 @@ class AspectBucket:
         self.bucket_data: Dict[tuple, List[int]] = dict()
         self.init_buckets()
         self.fill_buckets()
-    
+
     def init_buckets(self):
         possible_lengths = list(range(self.bucket_length_min, self.bucket_length_max + 1, self.bucket_increment))
         possible_buckets = list((w, h) for w, h in itertools.product(possible_lengths, possible_lengths)
                         if w >= h and w * h <= self.max_image_area and w / h <= self.max_ratio)
-        
+
         buckets_by_ratio = {}
 
         # group the buckets by their aspect ratios
@@ -249,10 +262,13 @@ class AspectBucket:
 
         for b in buckets:
             self.bucket_data[b] = []
-        
+
     def get_batch_count(self):
         return sum(len(b) // self.batch_size for b in self.bucket_data.values())
-    
+
+    def get_bucket_info(self):
+        return json.dumps({ "buckets": self.buckets, "bucket_ratios": self._bucket_ratios })
+
     def get_batch_iterator(self) -> Generator[Tuple[Tuple[int, int], List[int]], None, None]:
         """
         Generator that provides batches where the images in a batch fall on the same bucket
@@ -303,7 +319,7 @@ class AspectBucket:
             total_generated_by_bucket[b] += self.batch_size
             bucket_pos[b] = i
             yield [idx for idx in batch]
-    
+
     def fill_buckets(self):
         entries = self.store.entries_iterator()
         total_dropped = 0
@@ -322,18 +338,18 @@ class AspectBucket:
             total_dropped += to_drop
 
         self.total_dropped = total_dropped
-    
+
     def _process_entry(self, entry: Image.Image, index: int) -> bool:
         aspect = entry.width / entry.height
-        
+
         if aspect > self.max_ratio or (1 / aspect) > self.max_ratio:
             return False
-        
+
         best_bucket = self._bucket_interp(aspect)
 
         if best_bucket is None:
             return False
-        
+
         bucket = self.buckets[round(float(best_bucket))]
 
         self.bucket_data[bucket].append(index)
@@ -348,13 +364,13 @@ class AspectBucketSampler(torch.utils.data.Sampler):
         self.bucket = bucket
         self.num_replicas = num_replicas
         self.rank = rank
-    
+
     def __iter__(self):
         # subsample the bucket to only include the elements that are assigned to this rank
         indices = self.bucket.get_batch_iterator()
         indices = list(indices)[self.rank::self.num_replicas]
         return iter(indices)
-    
+
     def __len__(self):
         return self.bucket.get_batch_count() // self.num_replicas
 
@@ -369,7 +385,7 @@ class AspectDataset(torch.utils.data.Dataset):
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize([0.5], [0.5]),
         ])
-    
+
     def __len__(self):
         return len(self.store)
 
@@ -462,18 +478,27 @@ def main():
     world_size = get_world_size()
     torch.cuda.set_device(rank)
 
-    if args.hf_token is None:
-        args.hf_token = os.environ['HF_API_TOKEN']
-
     if rank == 0:
         os.makedirs(args.output_path, exist_ok=True)
+        run = wandb.init(project=args.project_id, name=args.run_name, config=vars(args), dir=args.output_path+'/wandb')
 
-        # remove hf_token from args so sneaky people don't steal it from the wandb logs
-        sanitized_args = {k: v for k, v in vars(args).items() if k not in ['hf_token']}
-        run = wandb.init(project=args.project_id, name=args.run_name, config=sanitized_args, dir=args.output_path+'/wandb')
+        # Inform the user of host, and various versions -- useful for debugging isseus.
+        print("RUN_NAME:", args.run_name)
+        print("HOST:", socket.gethostname())
+        print("CUDA:", torch.version.cuda)
+        print("TORCH:", torch.__version__)
+        print("TRANSFORMERS:", transformers.__version__)
+        print("DIFFUSERS:", diffusers.__version__)
+        print("MODEL:", args.model)
+        print("FP16:", args.fp16)
+        print("RESOLUTION:", args.resolution)
+
+    if args.hf_token is None:
+        args.hf_token = os.environ['HF_API_TOKEN']
+        print('It is recommended to set the HF_API_TOKEN environment variable instead of passing it as a command line argument since WandB will automatically log it.')
 
     device = torch.device('cuda')
-    
+
     print("DEVICE:", device)
 
     # setup fp16 stuff
@@ -483,6 +508,9 @@ def main():
     torch.manual_seed(args.seed)
     print('RANDOM SEED:', args.seed)
 
+    if args.resume:
+        args.model = args.resume
+    
     tokenizer = CLIPTokenizer.from_pretrained(args.model, subfolder='tokenizer', use_auth_token=args.hf_token)
     text_encoder = CLIPTextModel.from_pretrained(args.model, subfolder='text_encoder', use_auth_token=args.hf_token)
     vae = AutoencoderKL.from_pretrained(args.model, subfolder='vae', use_auth_token=args.hf_token)
@@ -494,7 +522,7 @@ def main():
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
-    
+
     if args.use_8bit_adam: # Bits and bytes is only supported on certain CUDA setups, so default to regular adam if it fails.
         try:
             import bitsandbytes as bnb
@@ -504,7 +532,7 @@ def main():
             optimizer_cls = torch.optim.AdamW
     else:
         optimizer_cls = torch.optim.AdamW
-    
+
     optimizer = optimizer_cls(
         unet.parameters(),
         lr=args.lr,
@@ -518,28 +546,26 @@ def main():
         beta_end=0.012,
         beta_schedule='scaled_linear',
         num_train_timesteps=1000,
-        tensor_format='pt'
     )
 
     # load dataset
 
     store = ImageStore(args.dataset)
     dataset = AspectDataset(store, tokenizer)
-    bucket = AspectBucket(store, 16, args.batch_size, args.bucket_side_min, args.bucket_side_max, 64, args.resolution * args.resolution, 2.0)
+    bucket = AspectBucket(store, args.num_buckets, args.batch_size, args.bucket_side_min, args.bucket_side_max, 64, args.resolution * args.resolution, 2.0)
     sampler = AspectBucketSampler(bucket=bucket, num_replicas=world_size, rank=rank)
 
     print(f'STORE_LEN: {len(store)}')
+
+    if args.output_bucket_info:
+        print(bucket.get_bucket_info())
+        exit(0)
 
     train_dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_sampler=sampler,
         num_workers=0,
         collate_fn=dataset.collate_fn
-    )
-
-    lr_scheduler = get_scheduler(
-        'constant',
-        optimizer=optimizer
     )
 
     weight_dtype = torch.float16 if args.fp16 else torch.float32
@@ -554,14 +580,26 @@ def main():
     # create ema
     if args.use_ema:
         ema_unet = EMAModel(unet.parameters())
-    
+
     print(get_gpu_ram())
 
     num_steps_per_epoch = len(train_dataloader)
     progress_bar = tqdm.tqdm(range(args.epochs * num_steps_per_epoch), desc="Total Steps", leave=False)
     global_step = 0
 
-    def save_checkpoint():
+    if args.resume:
+        target_global_step = int(args.resume.split('_')[-1])
+        print(f'resuming from {args.resume}...')
+
+    lr_scheduler = get_scheduler(
+        args.lr_scheduler,
+        optimizer=optimizer,
+        num_warmup_steps=int(args.lr_scheduler_warmup * num_steps_per_epoch * args.epochs),
+        num_training_steps=args.epochs * num_steps_per_epoch,
+        #last_epoch=(global_step // num_steps_per_epoch) - 1,
+    )
+
+    def save_checkpoint(global_step):
         if rank == 0:
             if args.use_ema:
                 ema_unet.copy_to(unet.parameters())
@@ -576,110 +614,138 @@ def main():
                 safety_checker=StableDiffusionSafetyChecker.from_pretrained("CompVis/stable-diffusion-safety-checker"),
                 feature_extractor=CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32"),
             )
-            pipeline.save_pretrained(args.output_path)
+            print(f'saving checkpoint to: {args.output_path}/{args.run_name}_{global_step}')
+            pipeline.save_pretrained(f'{args.output_path}/{args.run_name}_{global_step}')
         # barrier
         torch.distributed.barrier()
 
     # train!
-    loss = torch.tensor(0.0, device=device, dtype=weight_dtype)
-    for epoch in range(args.epochs):
-        unet.train()
-        train_loss = 0.0
-        for step, batch in enumerate(train_dataloader):
-            b_start = time.perf_counter()
-            latents = vae.encode(batch['pixel_values'].to(device, dtype=weight_dtype)).latent_dist.sample()
-            latents = latents * 0.18215
+    try:
+        loss = torch.tensor(0.0, device=device, dtype=weight_dtype)
+        for epoch in range(args.epochs):
+            unet.train()
+            for _, batch in enumerate(train_dataloader):
+                if args.resume and global_step < target_global_step:
+                    if rank == 0:
+                        progress_bar.update(1)
+                    global_step += 1
+                    continue
+                b_start = time.perf_counter()
+                latents = vae.encode(batch['pixel_values'].to(device, dtype=weight_dtype)).latent_dist.sample()
+                latents = latents * 0.18215
 
-            # Sample noise
-            noise = torch.randn_like(latents)
-            bsz = latents.shape[0]
-            # Sample a random timestep for each image
-            timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (bsz,), device=latents.device)
-            timesteps = timesteps.long()
+                # Sample noise
+                noise = torch.randn_like(latents)
+                bsz = latents.shape[0]
+                # Sample a random timestep for each image
+                timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (bsz,), device=latents.device)
+                timesteps = timesteps.long()
 
-            # Add noise to the latents according to the noise magnitude at each timestep
-            # (this is the forward diffusion process)
-            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+                # Add noise to the latents according to the noise magnitude at each timestep
+                # (this is the forward diffusion process)
+                noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
-            # Get the text embedding for conditioning
-            encoder_hidden_states = text_encoder(batch["input_ids"].to(device))[0]
+                # Get the text embedding for conditioning
+                encoder_hidden_states = text_encoder(batch['input_ids'].to(device), output_hidden_states=True)
+                if args.clip_penultimate:
+                    encoder_hidden_states = text_encoder.text_model.final_layer_norm(encoder_hidden_states['hidden_states'][-2])
+                else:
+                    encoder_hidden_states = encoder_hidden_states.last_hidden_state
 
-            # Predict the noise residual and compute loss
-            with torch.autocast('cuda', enabled=args.fp16):
-                noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-            
-            loss = torch.nn.functional.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
+                # Predict the noise residual and compute loss
+                with torch.autocast('cuda', enabled=args.fp16):
+                    noise_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-            # Backprop and all reduce
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            lr_scheduler.step()
-            optimizer.zero_grad()
+                loss = torch.nn.functional.mse_loss(noise_pred.float(), noise.float(), reduction="mean")
 
-            # Update EMA
-            if args.use_ema:
-                ema_unet.step(unet.parameters())
-            
-            # perf
-            b_end = time.perf_counter()
-            seconds_per_step = b_end - b_start
-            steps_per_second = 1 / seconds_per_step
-            rank_images_per_second = args.batch_size * steps_per_second
-            world_images_per_second = rank_images_per_second * world_size
-            samples_seen = global_step * args.batch_size * world_size
+                # Backprop and all reduce
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                lr_scheduler.step()
+                optimizer.zero_grad()
 
-            # All reduce loss
-            torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.SUM)
-            
-            if rank == 0:
-                progress_bar.update(1)
-                global_step += 1
-                logs = {
-                    "train/loss": loss.detach().item() / world_size,
-                    "train/lr": lr_scheduler.get_last_lr()[0],
-                    "train/epoch": epoch,
-                    "train/samples_seen": samples_seen,
-                    "perf/rank_samples_per_second": rank_images_per_second,
-                    "perf/global_samples_per_second": world_images_per_second,
-                }
-                progress_bar.set_postfix(logs)
-                run.log(logs)
+                # Update EMA
+                if args.use_ema:
+                    ema_unet.step(unet.parameters())
 
-            if global_step % args.save_steps == 0:
-                save_checkpoint()
-            
-            if global_step % args.image_log_steps == 0:
+                # perf
+                b_end = time.perf_counter()
+                seconds_per_step = b_end - b_start
+                steps_per_second = 1 / seconds_per_step
+                rank_images_per_second = args.batch_size * steps_per_second
+                world_images_per_second = rank_images_per_second * world_size
+                samples_seen = global_step * args.batch_size * world_size
+
+                # All reduce loss
+                torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.SUM)
+
                 if rank == 0:
-                    # get prompt from random batch
-                    prompt = tokenizer.decode(batch['input_ids'][random.randint(0, len(batch['input_ids'])-1)].tolist())
-                    pipeline = StableDiffusionPipeline(
-                        text_encoder=text_encoder,
-                        vae=vae,
-                        unet=unet,
-                        tokenizer=tokenizer,
-                        scheduler=PNDMScheduler(
-                            beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", skip_prk_steps=True
-                        ),
-                        safety_checker=None, # display safety checker to save memory
-                        feature_extractor=CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32"),
-                    ).to(device)
-                    # inference
-                    images = []
-                    with torch.no_grad():
-                        with torch.autocast('cuda', enabled=args.fp16):
-                            for _ in range(args.image_log_amount):
-                                images.append(wandb.Image(pipeline(prompt).images[0], caption=prompt))
-                    # log images under single caption
-                    run.log({'images': images})
+                    progress_bar.update(1)
+                    global_step += 1
+                    logs = {
+                        "train/loss": loss.detach().item() / world_size,
+                        "train/lr": lr_scheduler.get_last_lr()[0],
+                        "train/epoch": epoch,
+                        "train/step": global_step,
+                        "train/samples_seen": samples_seen,
+                        "perf/rank_samples_per_second": rank_images_per_second,
+                        "perf/global_samples_per_second": world_images_per_second,
+                    }
+                    progress_bar.set_postfix(logs)
+                    run.log(logs, step=global_step)
 
-                    # cleanup so we don't run out of memory
-                    del pipeline
-                    gc.collect()
-                torch.distributed.barrier()
-    
-    if rank == 0:
-        save_checkpoint()
+                if global_step % args.save_steps == 0:
+                    save_checkpoint(global_step)
+
+                if global_step % args.image_log_steps == 0:
+                    if rank == 0:
+                        # get prompt from random batch
+                        prompt = tokenizer.decode(batch['input_ids'][random.randint(0, len(batch['input_ids'])-1)].tolist())
+
+                        if args.image_log_scheduler == 'DDIMScheduler':
+                            print('using DDIMScheduler scheduler')
+                            scheduler = DDIMScheduler(
+                                beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear"
+                            )
+                        else:
+                            print('using PNDMScheduler scheduler')
+                            scheduler=PNDMScheduler(
+                                beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", skip_prk_steps=True
+                            )
+
+                        pipeline = StableDiffusionPipeline(
+                            text_encoder=text_encoder,
+                            vae=vae,
+                            unet=unet,
+                            tokenizer=tokenizer,
+                            scheduler=scheduler,
+                            safety_checker=None, # disable safety checker to save memory
+                            feature_extractor=CLIPFeatureExtractor.from_pretrained("openai/clip-vit-base-patch32"),
+                        ).to(device)
+                        # inference
+                        images = []
+                        with torch.no_grad():
+                            with torch.autocast('cuda', enabled=args.fp16):
+                                for _ in range(args.image_log_amount):
+                                    images.append(
+                                        wandb.Image(pipeline(
+                                            prompt, num_inference_steps=args.image_log_inference_steps
+                                        ).images[0],
+                                        caption=prompt)
+                                    )
+                        # log images under single caption
+                        run.log({'images': images}, step=global_step)
+
+                        # cleanup so we don't run out of memory
+                        del pipeline
+                        gc.collect()
+                    torch.distributed.barrier()
+    except Exception as e:
+        print(f'Exception caught on rank {rank} at step {global_step}, saving checkpoint...\n{e}\n{traceback.format_exc()}')
+        pass
+
+    save_checkpoint(global_step)
 
     torch.distributed.barrier()
     cleanup()

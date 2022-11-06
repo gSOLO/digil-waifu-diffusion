@@ -11,7 +11,7 @@ streamlit>=0.73.1
 einops==0.3.0
 torch-fidelity==0.3.0
 transformers==4.19.2
-torchmetrics==0.6.0
+torchmetrics==0.7.0
 kornia==0.6.7
 gradio==3.8
 basicsr
@@ -34,6 +34,9 @@ torchdiffeq
 git+https://github.com/crowsonkb/k-diffusion.git
 git+https://github.com/TencentARC/GFPGAN.git@8d2447a2d918f8eba5a4a01463fd48e45126a379
 git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
+diffusers==0.7.1
+kornia==0.6
+gradio
 git+https://github.com/illeatmyhat/taming-transformers.git@master#egg=taming-transformers
 git+https://github.com/openai/CLIP@d50d76daa670286dd6cacf3bcd80b5e4823fc8e1
 git+https://github.com/hlky/k-diffusion-sd#egg=k_diffusion
@@ -43,3 +46,4 @@ inflection
 wandb
 opencv-python
 requests
+pynvml==11.4.1
